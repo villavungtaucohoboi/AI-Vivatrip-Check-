@@ -17,7 +17,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Card } from "@/components/ui/card";
 import { PriceInput } from "@/components/ui/price-input";
 import { HotelRateEditor } from "@/components/admin/hotel-rate-editor";
-import { PRODUCT_TYPE_LABEL, type HotelRate, type Product, type ProductImage } from "@/lib/types";
+import { PRODUCT_TYPE_LABEL, type HotelRate, type Product, type ProductImage as ProductImageRow } from "@/lib/types";
 
 interface ExistingImage {
   url: string;
@@ -47,7 +47,7 @@ export function ProductForm({
   rates,
 }: {
   product?: Product;
-  images?: ProductImage[];
+  images?: ProductImageRow[];
   rates?: HotelRate[];
 }) {
   const router = useRouter();
