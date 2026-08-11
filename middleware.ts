@@ -1,16 +1,32 @@
-import { type NextRequest } from "next/server";
-import { updateSession } from "@/lib/supabase/middleware";
+import { NextResponse, type NextRequest } from "next/server";
+import { ADMIN_COOKIE_NAME } from "@/lib/admin-auth";
 
-export async function middleware(request: NextRequest) {
-  return updateSession(request);
+export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  // Trang tìm sản phẩm / chi tiết sản phẩm: mở tự do, không cần mật khẩu.
+  if (!pathname.startsWith("/admin")) {
+    return NextResponse.next();
+  }
+
+  // Trang nhập mật khẩu Admin: luôn cho vào (tránh redirect loop).
+  if (pathname.startsWith("/admin/login")) {
+    return NextResponse.next();
+  }
+
+  const expected = process.env.ADMIN_PASSWORD;
+  const cookieValue = request.cookies.get(ADMIN_COOKIE_NAME)?.value;
+
+  if (!expected || cookieValue !== expected) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/admin/login";
+    url.searchParams.set("next", pathname);
+    return NextResponse.redirect(url);
+  }
+
+  return NextResponse.next();
 }
 
 export const config = {
-  matcher: [
-    /*
-     * Áp dụng middleware cho mọi route trừ:
-     * - file tĩnh (_next/static, _next/image, favicon, ảnh...)
-     */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
-  ],
+  matcher: ["/admin/:path*"],
 };

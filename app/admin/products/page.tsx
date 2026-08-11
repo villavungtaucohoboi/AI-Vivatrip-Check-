@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { CalendarDays, Plus, Upload } from "lucide-react";
-import { createClient, getCurrentProfile } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/components/header";
 import { BottomNav } from "@/components/bottom-nav";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,6 @@ import { AdminProductTable } from "@/components/admin/admin-product-table";
 import type { Product } from "@/lib/types";
 
 export default async function AdminProductsPage() {
-  const profile = await getCurrentProfile();
   const supabase = await createClient();
 
   const { data: products } = await supabase
@@ -18,7 +17,7 @@ export default async function AdminProductsPage() {
 
   return (
     <div className="min-h-dvh bg-paper pb-20 sm:pb-0">
-      <Header role={profile?.role ?? "admin"} name={profile?.name} />
+      <Header role="admin" />
 
       <main className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8">
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
@@ -51,7 +50,7 @@ export default async function AdminProductsPage() {
         <AdminProductTable initialProducts={(products ?? []) as Product[]} />
       </main>
 
-      <BottomNav role={profile?.role ?? "admin"} />
+      <BottomNav role="admin" />
     </div>
   );
 }

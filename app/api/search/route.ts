@@ -7,14 +7,6 @@ import type { Holiday, Product, SearchRequestBody, SearchResponseBody } from "@/
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json({ error: "Chưa đăng nhập" }, { status: 401 });
-  }
-
   const body: SearchRequestBody = await req.json();
   const query = body.query?.trim() ?? "";
   const explicitFilters = body.filters ?? {};

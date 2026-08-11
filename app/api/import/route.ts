@@ -1,13 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient, getCurrentProfile } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 import type { ImportRow } from "@/lib/types";
 
 export async function POST(req: NextRequest) {
-  const profile = await getCurrentProfile();
-  if (!profile || profile.role !== "admin") {
-    return NextResponse.json({ error: "Không có quyền import" }, { status: 403 });
-  }
-
   const { rows }: { rows: ImportRow[] } = await req.json();
 
   if (!Array.isArray(rows) || rows.length === 0) {

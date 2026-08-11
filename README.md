@@ -37,47 +37,41 @@ cp .env.example .env.local
 1. Tạo project mới tại [supabase.com](https://supabase.com).
 2. Vào **SQL Editor**, chạy lần lượt các file sau (theo đúng thứ tự):
    - [`supabase/migrations/0001_init.sql`](./supabase/migrations/0001_init.sql) — tạo bảng
-     `profiles`, `products`, `product_images`, `hotel_rates`, RLS (Sale chỉ đọc, Admin đọc/ghi),
-     và storage bucket `product-images` (public) để lưu ảnh sản phẩm.
+     `products`, `product_images`, `hotel_rates`, và storage bucket `product-images` (public)
+     để lưu ảnh sản phẩm.
    - [`supabase/migrations/0002_pricing.sql`](./supabase/migrations/0002_pricing.sql) — thêm cột
      giá theo khung ngày cho villa/resort (`price_weekday`, `price_friday_sunday`,
-     `price_saturday_holiday`, `discount_percent`) và bảng `holidays` (Admin quản lý ngày lễ
-     qua trang `/admin/holidays`).
+     `price_saturday_holiday`, `discount_percent`) và bảng `holidays` (quản lý ngày lễ qua
+     trang `/admin/holidays`).
+   - [`supabase/migrations/0003_open_access.sql`](./supabase/migrations/0003_open_access.sql) —
+     mở quyền đọc/ghi cho toàn bộ bảng (app không dùng tài khoản Supabase Auth nữa — xem mục
+     "Đăng nhập Admin" bên dưới).
 3. (Tùy chọn nhưng nên làm) Chạy tiếp:
    - [`supabase/seed.sql`](./supabase/seed.sql) — 15 sản phẩm mẫu ở 5 khu vực để test giao diện
      và tìm kiếm ngay.
    - [`supabase/seed_pricing.sql`](./supabase/seed_pricing.sql) — điền giá theo khung ngày cho
      10 villa/resort mẫu ở trên + 2 ngày lễ mẫu.
-4. Vào **Project Settings > API**, copy `Project URL` và `anon public key` vào
-   `.env.local`.
+4. Vào **Project Settings > Data API**, copy `Project URL`. Vào **Project Settings > API Keys**,
+   copy `Publishable key` (dùng thay cho `anon key` cũ). Dán cả 2 vào `.env.local`.
 
 ### Environment variables
 
 | Biến | Mô tả |
 |---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | URL project Supabase |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Anon/public key của project |
+| `NEXT_PUBLIC_SUPABASE_URL` | Project URL (Settings > Data API) |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Publishable key (Settings > API Keys) |
+| `ADMIN_PASSWORD` | Mật khẩu chung để vào khu vực Admin — tự đặt, không cần tài khoản |
 
-App chỉ dùng anon key ở phía client/server — bảo mật dữ liệu hoàn toàn dựa vào
-Row Level Security (RLS) đã cấu hình trong migration, không cần service role key.
+## 3. Đăng nhập Admin
 
-## 3. Tạo tài khoản Admin đầu tiên
+App **không dùng hệ thống tài khoản/email** — không cần tạo user trên Supabase. Khu vực
+tìm kiếm (`/search`, `/products/[id]`) mở tự do cho mọi người. Khu vực Admin (`/admin/*`,
+để thêm/sửa/xóa sản phẩm) được bảo vệ bằng **một mật khẩu chung** đặt trong biến môi trường
+`ADMIN_PASSWORD` — vào `/admin/products` (hoặc bấm "Quản lý sản phẩm") sẽ tự chuyển tới trang
+nhập mật khẩu. Ai biết mật khẩu này đều vào sửa được, nên chỉ chia sẻ nội bộ, đừng đăng công khai.
 
-Vì đây là công cụ nội bộ, không có trang tự đăng ký — Admin tạo tài khoản cho
-từng sale. Để tạo **Admin đầu tiên**:
-
-1. Vào Supabase Dashboard > **Authentication > Users** > **Add user** > tạo
-   user với email + mật khẩu (chọn "Auto Confirm User").
-   Trigger trong migration sẽ tự tạo dòng tương ứng trong bảng `profiles` với
-   role mặc định là `sale`.
-2. Vào **SQL Editor**, chạy lệnh sau để nâng user đó lên Admin (thay email):
-
-   ```sql
-   update public.profiles set role = 'admin' where email = 'admin@vivatrip.vn';
-   ```
-
-3. Từ giờ, Admin này có thể tạo thêm tài khoản Sale khác qua **Authentication
-   > Add user** (giữ role mặc định `sale`, không cần chạy SQL).
+Đây là mật khẩu cấp cho cả nhóm dùng chung (không phân biệt từng người) — nếu sau này cần
+nhiều tài khoản riêng biệt có nhật ký ai sửa gì, sẽ cần nâng cấp lên hệ thống tài khoản đầy đủ.
 
 ## 4. Chạy local
 
@@ -85,15 +79,16 @@ từng sale. Để tạo **Admin đầu tiên**:
 npm run dev
 ```
 
-Mở [http://localhost:3000](http://localhost:3000), đăng nhập bằng tài khoản
-vừa tạo ở bước 3.
+Mở [http://localhost:3000](http://localhost:3000) — trang tìm kiếm dùng ngay, không cần đăng
+nhập. Vào `/admin/products` và nhập đúng giá trị `ADMIN_PASSWORD` trong `.env.local` để vào
+khu vực quản lý.
 
 ## 5. Deploy Vercel
 
 1. Push code lên GitHub.
 2. Vào [vercel.com](https://vercel.com) > **New Project** > import repo.
-3. Ở phần Environment Variables, thêm `NEXT_PUBLIC_SUPABASE_URL` và
-   `NEXT_PUBLIC_SUPABASE_ANON_KEY` (giống `.env.local`).
+3. Ở phần Environment Variables, thêm cả 3 biến: `NEXT_PUBLIC_SUPABASE_URL`,
+   `NEXT_PUBLIC_SUPABASE_ANON_KEY`, và `ADMIN_PASSWORD` (giống `.env.local`).
 4. Deploy. Vercel tự nhận diện Next.js, không cần cấu hình thêm.
 
 ## Cấu trúc thư mục

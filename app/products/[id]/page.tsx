@@ -10,7 +10,8 @@ import {
   Users,
   Waves,
 } from "lucide-react";
-import { createClient, getCurrentProfile } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
+import { isAdminSession } from "@/lib/admin-auth";
 import { Header } from "@/components/header";
 import { BottomNav } from "@/components/bottom-nav";
 import { ProductGallery } from "@/components/product-gallery";
@@ -48,8 +49,8 @@ export default async function ProductDetailPage({
 }) {
   const { id } = await params;
   const { date } = await searchParams;
-  const profile = await getCurrentProfile();
   const supabase = await createClient();
+  const role = (await isAdminSession()) ? "admin" : "sale";
 
   const { data: productRow } = await supabase.from("products").select("*").eq("id", id).single();
 
@@ -90,7 +91,7 @@ export default async function ProductDetailPage({
 
   return (
     <div className="min-h-dvh bg-paper pb-20 sm:pb-0">
-      <Header role={profile?.role ?? "sale"} name={profile?.name} />
+      <Header role={role} />
 
       <main className="mx-auto max-w-3xl px-4 py-6 sm:px-6 sm:py-8">
         <Link
@@ -199,7 +200,7 @@ export default async function ProductDetailPage({
         )}
       </main>
 
-      <BottomNav role={profile?.role ?? "sale"} />
+      <BottomNav role={role} />
     </div>
   );
 }

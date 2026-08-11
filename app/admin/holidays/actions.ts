@@ -1,20 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient, getCurrentProfile } from "@/lib/supabase/server";
-
-async function requireAdmin() {
-  const profile = await getCurrentProfile();
-  if (!profile || profile.role !== "admin") {
-    throw new Error("Bạn không có quyền thực hiện thao tác này.");
-  }
-}
+import { createClient } from "@/lib/supabase/server";
 
 export async function addHoliday(
   holiday_date: string,
   holiday_name: string
 ): Promise<{ ok: true } | { error: string }> {
-  await requireAdmin();
   const supabase = await createClient();
 
   const { error } = await supabase.from("holidays").insert({ holiday_date, holiday_name });
@@ -32,7 +24,6 @@ export async function addHoliday(
 }
 
 export async function deleteHoliday(id: string): Promise<{ ok: true } | { error: string }> {
-  await requireAdmin();
   const supabase = await createClient();
 
   const { error } = await supabase.from("holidays").delete().eq("id", id);

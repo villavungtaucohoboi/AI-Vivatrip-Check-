@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { createClient, getCurrentProfile } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/components/header";
 import { BottomNav } from "@/components/bottom-nav";
 import { ProductForm } from "@/components/admin/product-form";
@@ -13,7 +13,6 @@ export default async function EditProductPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const profile = await getCurrentProfile();
   const supabase = await createClient();
 
   const { data: productRow } = await supabase.from("products").select("*").eq("id", id).single();
@@ -33,7 +32,7 @@ export default async function EditProductPage({
 
   return (
     <div className="min-h-dvh bg-paper pb-20 sm:pb-0">
-      <Header role={profile?.role ?? "admin"} name={profile?.name} />
+      <Header role="admin" />
 
       <main className="mx-auto max-w-2xl px-4 py-6 sm:px-6 sm:py-8">
         <Link
@@ -51,7 +50,7 @@ export default async function EditProductPage({
         />
       </main>
 
-      <BottomNav role={profile?.role ?? "admin"} />
+      <BottomNav role="admin" />
     </div>
   );
 }

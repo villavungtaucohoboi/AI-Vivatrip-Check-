@@ -1,22 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { LogOut, Plus, Search, Settings } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { usePathname } from "next/navigation";
+import { Lock, Plus, Search, Settings } from "lucide-react";
+import { logoutAdmin } from "@/app/admin/login/actions";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/lib/types";
 
-export function Header({ role, name }: { role: UserRole; name?: string | null }) {
+export function Header({ role }: { role: UserRole }) {
   const pathname = usePathname();
-  const router = useRouter();
-  const supabase = createClient();
-
-  async function handleLogout() {
-    await supabase.auth.signOut();
-    router.replace("/login");
-    router.refresh();
-  }
+  const inAdminArea = pathname.startsWith("/admin");
 
   const navItem = (href: string, label: string, Icon: typeof Search) => (
     <Link
@@ -32,8 +25,6 @@ export function Header({ role, name }: { role: UserRole; name?: string | null })
       {label}
     </Link>
   );
-
-  const initials = (name || "VT").trim().slice(0, 2).toUpperCase();
 
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-paper/90 backdrop-blur">
@@ -60,21 +51,18 @@ export function Header({ role, name }: { role: UserRole; name?: string | null })
           )}
         </nav>
 
-        <div className="flex items-center gap-2.5">
-          <div
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-light text-[12px] font-semibold text-teal-dark"
-            title={name ?? undefined}
-          >
-            {initials}
-          </div>
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-sm font-medium text-ink-muted hover:bg-paper-dim hover:text-ink"
-            aria-label="Đăng xuất"
-          >
-            <LogOut className="h-4 w-4" />
-          </button>
-        </div>
+        {role === "admin" && inAdminArea && (
+          <form action={logoutAdmin}>
+            <button
+              type="submit"
+              className="flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-sm font-medium text-ink-muted hover:bg-paper-dim hover:text-ink"
+              aria-label="Khóa lại khu vực Admin"
+              title="Khóa lại khu vực Admin"
+            >
+              <Lock className="h-4 w-4" />
+            </button>
+          </form>
+        )}
       </div>
     </header>
   );

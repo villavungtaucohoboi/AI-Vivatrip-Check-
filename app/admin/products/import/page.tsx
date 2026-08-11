@@ -1,16 +1,14 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { getCurrentProfile } from "@/lib/supabase/server";
 import { Header } from "@/components/header";
 import { BottomNav } from "@/components/bottom-nav";
 import { ImportWizard } from "@/components/admin/import-wizard";
 
 export default async function ImportPage() {
-  const profile = await getCurrentProfile();
 
   return (
     <div className="min-h-dvh bg-paper pb-20 sm:pb-0">
-      <Header role={profile?.role ?? "admin"} name={profile?.name} />
+      <Header role="admin" />
 
       <main className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8">
         <Link
@@ -24,7 +22,7 @@ export default async function ImportPage() {
         <ImportWizard />
       </main>
 
-      <BottomNav role={profile?.role ?? "admin"} />
+      <BottomNav role="admin" />
     </div>
   );
 }

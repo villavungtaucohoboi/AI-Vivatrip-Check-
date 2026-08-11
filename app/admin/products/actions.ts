@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient, getCurrentProfile } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 import type { ProductType } from "@/lib/types";
 
 export interface ProductInput {
@@ -37,19 +37,10 @@ export interface HotelRateInput {
   note?: string | null;
 }
 
-async function requireAdmin() {
-  const profile = await getCurrentProfile();
-  if (!profile || profile.role !== "admin") {
-    throw new Error("Bạn không có quyền thực hiện thao tác này.");
-  }
-  return profile;
-}
-
 export async function saveProduct(
   input: ProductInput,
   id?: string
 ): Promise<{ id: string } | { error: string }> {
-  await requireAdmin();
   const supabase = await createClient();
 
   // Villa/resort: `price` là cột tham khảo/sort nhanh, luôn đồng bộ = price_weekday.
@@ -77,7 +68,6 @@ export async function saveProduct(
 }
 
 export async function deleteProduct(id: string): Promise<{ ok: true } | { error: string }> {
-  await requireAdmin();
   const supabase = await createClient();
 
   const { error } = await supabase.from("products").delete().eq("id", id);
@@ -93,7 +83,6 @@ export async function saveHotelRates(
   productId: string,
   rates: HotelRateInput[]
 ): Promise<{ ok: true } | { error: string }> {
-  await requireAdmin();
   const supabase = await createClient();
 
   const { error: deleteError } = await supabase
@@ -120,7 +109,6 @@ export async function saveProductImages(
   productId: string,
   imageUrls: string[]
 ): Promise<{ ok: true } | { error: string }> {
-  await requireAdmin();
   const supabase = await createClient();
 
   const { error: deleteError } = await supabase
