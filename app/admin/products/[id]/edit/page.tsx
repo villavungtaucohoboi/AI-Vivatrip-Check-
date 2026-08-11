@@ -5,7 +5,7 @@ import { createClient, getCurrentProfile } from "@/lib/supabase/server";
 import { Header } from "@/components/header";
 import { BottomNav } from "@/components/bottom-nav";
 import { ProductForm } from "@/components/admin/product-form";
-import type { HotelRate } from "@/lib/types";
+import type { HotelRate, Product, ProductImage } from "@/lib/types";
 
 export default async function EditProductPage({
   params,
@@ -16,8 +16,9 @@ export default async function EditProductPage({
   const profile = await getCurrentProfile();
   const supabase = await createClient();
 
-  const { data: product } = await supabase.from("products").select("*").eq("id", id).single();
-  if (!product) notFound();
+  const { data: productRow } = await supabase.from("products").select("*").eq("id", id).single();
+  if (!productRow) notFound();
+  const product = productRow as Product;
 
   const [{ data: images }, { data: rates }] = await Promise.all([
     supabase
@@ -45,7 +46,7 @@ export default async function EditProductPage({
         <h1 className="mb-5 font-display text-2xl text-ink">Sửa sản phẩm</h1>
         <ProductForm
           product={product}
-          images={images ?? []}
+          images={(images ?? []) as ProductImage[]}
           rates={(rates ?? []) as HotelRate[]}
         />
       </main>

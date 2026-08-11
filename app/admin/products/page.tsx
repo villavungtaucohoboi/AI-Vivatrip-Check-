@@ -5,6 +5,7 @@ import { Header } from "@/components/header";
 import { BottomNav } from "@/components/bottom-nav";
 import { Button } from "@/components/ui/button";
 import { AdminProductTable } from "@/components/admin/admin-product-table";
+import type { Product } from "@/lib/types";
 
 export default async function AdminProductsPage() {
   const profile = await getCurrentProfile();
@@ -47,7 +48,7 @@ export default async function AdminProductsPage() {
           </div>
         </div>
 
-        <AdminProductTable initialProducts={products ?? []} />
+        <AdminProductTable initialProducts={(products ?? []) as Product[]} />
       </main>
 
       <BottomNav role={profile?.role ?? "admin"} />

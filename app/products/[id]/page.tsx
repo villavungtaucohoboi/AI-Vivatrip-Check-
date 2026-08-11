@@ -21,7 +21,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatVND } from "@/lib/format";
 import { resolveProductPricing } from "@/lib/pricing";
-import { PRODUCT_TYPE_LABEL, type Holiday, type HotelRate, type ProductImage } from "@/lib/types";
+import { PRODUCT_TYPE_LABEL, type Holiday, type HotelRate, type Product, type ProductImage } from "@/lib/types";
 
 const AMENITIES = [
   { key: "pool" as const, label: "Hồ bơi riêng", Icon: Waves },
@@ -51,9 +51,10 @@ export default async function ProductDetailPage({
   const profile = await getCurrentProfile();
   const supabase = await createClient();
 
-  const { data: product } = await supabase.from("products").select("*").eq("id", id).single();
+  const { data: productRow } = await supabase.from("products").select("*").eq("id", id).single();
 
-  if (!product) notFound();
+  if (!productRow) notFound();
+  const product = productRow as Product;
 
   const [{ data: images }, { data: rates }, { data: holidays }] = await Promise.all([
     supabase
