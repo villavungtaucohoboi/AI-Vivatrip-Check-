@@ -4,7 +4,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import type { HotelRateInput } from "@/app/admin/products/actions";
+import type { HotelRateInput } from "@/lib/admin-types";
 
 function emptyRate(): HotelRateInput {
   return { room_type: "", price: 0, capacity: 2, breakfast: false, extra_bed_price: null, note: "" };

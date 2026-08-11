@@ -7,7 +7,7 @@ import { ProductImage } from "@/components/product-image";
 import { Loader2, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
-import { saveProduct, saveHotelRates, saveProductImages, type ProductInput, type HotelRateInput } from "@/app/admin/products/actions";
+import { type ProductInput, type HotelRateInput } from "@/lib/admin-types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,6 +29,36 @@ interface NewImage {
   kind: "new";
 }
 type ImageItem = ExistingImage | NewImage;
+
+async function postJson<T>(url: string, body: unknown, method: "POST" | "DELETE" = "POST"): Promise<T> {
+  const res = await fetch(url, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "Có lỗi xảy ra, vui lòng thử lại.");
+  return data as T;
+}
+
+function sanitizeFileName(name: string): string {
+  const lastDot = name.lastIndexOf(".");
+  const base = lastDot > 0 ? name.slice(0, lastDot) : name;
+  const ext = lastDot > 0 ? name.slice(lastDot + 1) : "";
+
+  const cleanBase = base
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // bỏ dấu tiếng Việt
+    .replace(/đ/gi, "d")
+    .replace(/[^a-zA-Z0-9-_]+/g, "-") // mọi ký tự khác (khoảng trắng, emoji...) -> "-"
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .toLowerCase();
+
+  const cleanExt = ext.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+
+  return cleanExt ? `${cleanBase || "anh"}.${cleanExt}` : cleanBase || "anh";
+}
 
 function toRateInput(r: HotelRate): HotelRateInput {
   return {
@@ -126,7 +156,10 @@ export function ProductForm({
     setSaving(true);
 
     try {
-      const result = await saveProduct(form, product?.id);
+      const result = await postJson<{ id: string } | { error: string }>(
+        "/api/admin/products",
+        { input: form, id: product?.id }
+      );
       if ("error" in result) {
         setError(result.error);
         setSaving(false);
@@ -141,7 +174,7 @@ export function ProductForm({
         if (item.kind === "existing") {
           finalUrls.push(item.url);
         } else {
-          const path = `${productId}/${Date.now()}-${item.file.name}`;
+          const path = `${productId}/${Date.now()}-${sanitizeFileName(item.file.name)}`;
           const { error: uploadError } = await supabase.storage
             .from("product-images")
             .upload(path, item.file, { upsert: true });
@@ -157,13 +190,11 @@ export function ProductForm({
         }
       }
 
-      const imgResult = await saveProductImages(productId, finalUrls);
-      if ("error" in imgResult) throw new Error(imgResult.error);
+      await postJson(`/api/admin/products/${productId}/images`, { imageUrls: finalUrls });
 
       if (form.type === "hotel") {
         const validRates = rateItems.filter((r) => r.room_type.trim() && r.price > 0);
-        const rateResult = await saveHotelRates(productId, validRates);
-        if ("error" in rateResult) throw new Error(rateResult.error);
+        await postJson(`/api/admin/products/${productId}/rates`, { rates: validRates });
       }
 
       toast.success(isEdit ? "Đã cập nhật sản phẩm" : "Đã thêm sản phẩm mới");

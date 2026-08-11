@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/empty-state";
-import { addHoliday, deleteHoliday } from "@/app/admin/holidays/actions";
 import { formatDateVN } from "@/lib/pricing";
 import type { Holiday } from "@/lib/types";
 
@@ -30,11 +29,16 @@ export function HolidaysManager({ initialHolidays }: { initialHolidays: Holiday[
       return;
     }
     setSaving(true);
-    const result = await addHoliday(date, name.trim());
+    const res = await fetch("/api/admin/holidays", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ holiday_date: date, holiday_name: name.trim() }),
+    });
+    const result = await res.json();
     setSaving(false);
 
-    if ("error" in result) {
-      toast.error(result.error);
+    if (!res.ok || "error" in result) {
+      toast.error(result.error ?? "Có lỗi xảy ra, vui lòng thử lại.");
       return;
     }
     toast.success("Đã thêm ngày lễ");
@@ -50,11 +54,12 @@ export function HolidaysManager({ initialHolidays }: { initialHolidays: Holiday[
 
   async function handleDelete(h: Holiday) {
     setRemovingId(h.id);
-    const result = await deleteHoliday(h.id);
+    const res = await fetch(`/api/admin/holidays/${h.id}`, { method: "DELETE" });
+    const result = await res.json();
     setRemovingId(null);
 
-    if ("error" in result) {
-      toast.error("Không thể xóa: " + result.error);
+    if (!res.ok || "error" in result) {
+      toast.error("Không thể xóa: " + (result.error ?? "Lỗi không xác định"));
       return;
     }
     setHolidays((prev) => prev.filter((x) => x.id !== h.id));

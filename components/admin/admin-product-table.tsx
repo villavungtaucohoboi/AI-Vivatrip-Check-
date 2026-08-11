@@ -11,7 +11,6 @@ import { ProductImage } from "@/components/product-image";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { EmptyState } from "@/components/empty-state";
 import { DeleteDialog } from "@/components/admin/delete-dialog";
-import { deleteProduct } from "@/app/admin/products/actions";
 import { formatVND } from "@/lib/format";
 import { PRODUCT_TYPE_LABEL, type Product } from "@/lib/types";
 
@@ -44,9 +43,10 @@ export function AdminProductTable({ initialProducts }: { initialProducts: Produc
 
   async function handleDelete() {
     if (!target) return;
-    const result = await deleteProduct(target.id);
-    if ("error" in result) {
-      toast.error("Không thể xóa: " + result.error);
+    const res = await fetch(`/api/admin/products/${target.id}`, { method: "DELETE" });
+    const result = await res.json();
+    if (!res.ok || "error" in result) {
+      toast.error("Không thể xóa: " + (result.error ?? "Lỗi không xác định"));
       return;
     }
     setProducts((prev) => prev.filter((p) => p.id !== target.id));
