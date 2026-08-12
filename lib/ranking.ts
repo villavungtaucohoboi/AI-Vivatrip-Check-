@@ -2,15 +2,17 @@ import { Holiday, Product, RankedProduct, SearchFilters } from "./types";
 import { resolveProductPricing } from "./pricing";
 
 // Trọng số giảm dần theo bậc ưu tiên (mỗi bậc luôn "nặng" hơn tổng tất cả
-// các bậc thấp hơn cộng lại), để đảm bảo đúng thứ tự ưu tiên đề bài yêu cầu:
-// 1. Khu vực > 2. Loại sản phẩm > 3. Sức chứa > 4. Giá gần ngân sách
-// > 5. Số phòng ngủ > 6. Tiện ích
+// các bậc thấp hơn cộng lại):
+// 0. Tên sản phẩm (nếu gõ đúng tên, ưu tiên tuyệt đối) > 1. Khu vực > 2. Loại
+// sản phẩm > 3. Sức chứa > 4. Tiện ích được yêu cầu (VD "view hồ") > 5. Giá
+// gần ngân sách > 6. Số phòng ngủ
+const W_NAME = 1_000_000;
 const W_AREA = 100_000;
 const W_TYPE = 10_000;
 const W_CAPACITY = 1_000;
-const W_PRICE = 900;
-const W_BEDROOMS = 90;
-const W_AMENITY_EACH = 2.25; // tối đa 6 tiện ích -> tối đa 13.5 điểm (vẫn nhỏ hơn nhiều so với W_BEDROOMS)
+const W_AMENITY_EACH = 100; // tối đa 7 tiện ích -> tối đa 700 (vẫn nhỏ hơn W_CAPACITY)
+const W_PRICE = 90;
+const W_BEDROOMS = 9;
 
 function normalize(str: string): string {
   return str
@@ -32,6 +34,16 @@ export function scoreProduct(
   rankingPrice: number | null
 ): number {
   let score = 0;
+
+  // 0. Tên sản phẩm — nếu sale gõ đúng 1 phần tên (VD "Doris"), ưu tiên tuyệt đối
+  if (filters.name) {
+    const productName = normalize(product.product_name);
+    const nameQuery = normalize(filters.name);
+    if (productName.includes(nameQuery)) score += W_NAME;
+    else if (nameQuery.split(" ").some((w) => w.length >= 2 && productName.includes(w))) {
+      score += W_NAME * 0.6;
+    }
+  }
 
   // 1. Khu vực
   if (filters.area) {
@@ -56,7 +68,12 @@ export function scoreProduct(
     }
   }
 
-  // 4. Giá gần ngân sách nhất (hoặc trong khoảng giá yêu cầu) — dùng
+  // 4. Tiện ích chính nếu khách có yêu cầu (VD "view hồ") — ưu tiên trước giá
+  (["pool", "near_beach", "sea_view", "karaoke", "bbq", "pickleball", "near_lake"] as const).forEach((key) => {
+    if (filters[key] && product[key]) score += W_AMENITY_EACH;
+  });
+
+  // 5. Giá gần ngân sách nhất (hoặc trong khoảng giá yêu cầu) — dùng
   // rankingPrice đã resolve theo đúng ngày, KHÔNG dùng product.price thẳng.
   if (rankingPrice != null) {
     if (filters.budget) {
@@ -75,17 +92,12 @@ export function scoreProduct(
     }
   }
 
-  // 5. Số phòng ngủ phù hợp
+  // 6. Số phòng ngủ phù hợp
   if (filters.bedrooms && product.bedrooms != null) {
     if (product.bedrooms === filters.bedrooms) score += W_BEDROOMS;
     else if (product.bedrooms > filters.bedrooms) score += W_BEDROOMS * 0.65;
     else score += W_BEDROOMS * 0.2 * (product.bedrooms / filters.bedrooms);
   }
-
-  // 6. Tiện ích chính nếu khách có yêu cầu
-  (["pool", "near_beach", "sea_view", "karaoke", "bbq", "pickleball", "near_lake"] as const).forEach((key) => {
-    if (filters[key] && product[key]) score += W_AMENITY_EACH;
-  });
 
   return score;
 }

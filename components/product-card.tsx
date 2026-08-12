@@ -21,10 +21,10 @@ function PriceBlock({ product }: { product: Product & { _pricing?: DatePricingCo
   if (product.type === "hotel") {
     return (
       <div>
-        <p className="text-[19px] font-bold leading-none tracking-tight text-teal-dark">
+        <p className="text-[14px] lg:text-[19px] font-bold leading-none tracking-tight text-teal-dark">
           {formatVND(product.price)}
         </p>
-        <p className="mt-1 text-[11px] text-ink-muted">giá phòng thấp nhất/đêm</p>
+        <p className="mt-1 text-[10px] lg:text-[11px] text-ink-muted">giá thấp nhất/đêm</p>
       </div>
     );
   }
@@ -37,12 +37,12 @@ function PriceBlock({ product }: { product: Product & { _pricing?: DatePricingCo
     return (
       <div>
         {hasDiscount && (
-          <p className="text-[11px] text-ink-muted line-through">{formatVND(ctx.basePrice)}</p>
+          <p className="text-[10px] lg:text-[11px] text-ink-muted line-through">{formatVND(ctx.basePrice)}</p>
         )}
-        <p className="text-[19px] font-bold leading-none tracking-tight text-teal-dark">
+        <p className="text-[14px] lg:text-[19px] font-bold leading-none tracking-tight text-teal-dark">
           {formatVND(hasDiscount ? ctx.finalPrice : ctx.basePrice)}
         </p>
-        <p className="mt-1 text-[11px] text-ink-muted">
+        <p className="mt-1 text-[10px] lg:text-[11px] text-ink-muted">
           {TIER_LABEL_SHORT[ctx.tier]} · {formatDateVN(ctx.date)}
           {hasDiscount && ` · CK ${formatDiscount(ctx.discountType, ctx.discountValue)}`}
         </p>
@@ -52,7 +52,7 @@ function PriceBlock({ product }: { product: Product & { _pricing?: DatePricingCo
 
   // Không có ngày — không giả định weekday, hiện đủ 3 khung giá
   return (
-    <div className="text-[11.5px] leading-relaxed text-ink-muted">
+    <div className="text-[10px] lg:text-[11.5px] leading-relaxed text-ink-muted">
       <p>
         <span className="font-semibold text-ink">{TIER_LABEL_SHORT.weekday}</span>{" "}
         {formatVNDShort(product.price_weekday)}
@@ -77,7 +77,7 @@ export function ProductCard({
   /** VD: "Phù hợp nhất" — chỉ nên truyền cho kết quả #1 của một tìm kiếm có nội dung */
   matchLabel?: string;
 }) {
-  const amenities = AMENITY_ICONS.filter(({ key }) => product[key]).slice(0, 3);
+  const amenities = AMENITY_ICONS.filter(({ key }) => product[key]).slice(0, 2);
   const detailHref = product._pricing?.date
     ? `/products/${product.id}?date=${product._pricing.date}`
     : `/products/${product.id}`;
@@ -89,56 +89,56 @@ export function ProductCard({
           <ProductImage
             src={product.thumbnail_url}
             alt={product.product_name}
-            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 50vw, 33vw"
             className="transition-transform duration-300 group-hover:scale-105"
           />
-          <div className="absolute inset-x-0 top-0 flex items-start justify-between p-2.5">
-            <Badge className="bg-white/95 text-ink shadow-sm" variant="neutral">
+          <div className="absolute inset-x-0 top-0 flex items-start justify-between p-1.5 lg:p-2.5">
+            <Badge className="bg-white/95 text-ink shadow-sm px-2 py-0.5 text-[10px] lg:px-2.5 lg:py-1 lg:text-xs" variant="neutral">
               {PRODUCT_TYPE_LABEL[product.type]}
             </Badge>
             {matchLabel && (
-              <Badge className="bg-teal text-white shadow-sm" variant="default">
+              <Badge className="bg-teal text-white shadow-sm px-2 py-0.5 text-[10px] lg:px-2.5 lg:py-1 lg:text-xs" variant="default">
                 {matchLabel}
               </Badge>
             )}
           </div>
         </div>
 
-        <div className="flex flex-1 flex-col gap-2 p-3.5">
+        <div className="flex flex-1 flex-col gap-1.5 lg:gap-2 p-2 lg:p-3.5">
           <div>
-            <h3 className="font-semibold text-[15px] leading-snug text-ink line-clamp-1">
+            <h3 className="font-semibold text-[12.5px] lg:text-[15px] leading-snug text-ink line-clamp-1">
               {product.product_name}
             </h3>
-            <p className="mt-0.5 flex items-center gap-1 text-[13px] text-ink-muted">
-              <MapPin className="h-3.5 w-3.5 shrink-0" />
-              {product.area}
+            <p className="mt-0.5 flex items-center gap-1 text-[11px] lg:text-[13px] text-ink-muted">
+              <MapPin className="h-3 w-3 lg:h-3.5 lg:w-3.5 shrink-0" />
+              <span className="truncate">{product.area}</span>
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-ink-muted">
+          <div className="flex flex-wrap items-center gap-x-2 lg:gap-x-3 gap-y-1 text-[10.5px] lg:text-[13px] text-ink-muted">
             {product.bedrooms != null && (
               <span className="flex items-center gap-1">
-                <BedDouble className="h-3.5 w-3.5" />
+                <BedDouble className="h-3 w-3 lg:h-3.5 lg:w-3.5" />
                 {product.bedrooms} PN
               </span>
             )}
             {product.max_guests != null && (
               <span className="flex items-center gap-1">
-                <Users className="h-3.5 w-3.5" />
+                <Users className="h-3 w-3 lg:h-3.5 lg:w-3.5" />
                 {product.max_guests} khách
               </span>
             )}
             {amenities.map(({ key, label, Icon }) => (
-              <span key={key} className="flex items-center gap-1">
+              <span key={key} className="hidden lg:flex items-center gap-1">
                 <Icon className="h-3.5 w-3.5" />
                 {label}
               </span>
             ))}
           </div>
 
-          <div className="mt-auto flex items-end justify-between pt-1.5">
+          <div className="mt-auto flex items-end justify-between pt-1 lg:pt-1.5">
             <PriceBlock product={product} />
-            <span className="hidden shrink-0 rounded-lg border border-border px-2.5 py-1.5 text-[12px] font-medium text-ink-muted group-hover:bg-paper-dim sm:block">
+            <span className="hidden shrink-0 rounded-lg border border-border px-2.5 py-1.5 text-[12px] font-medium text-ink-muted group-hover:bg-paper-dim lg:block">
               Xem chi tiết
             </span>
           </div>

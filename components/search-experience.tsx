@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Loader2, Plus } from "lucide-react";
+import { Loader2, Plus, X } from "lucide-react";
 import { SearchBar } from "@/components/search-bar";
 import { FilterSheet } from "@/components/filter-sheet";
 import { FilterBar } from "@/components/filter-bar";
@@ -11,13 +11,35 @@ import { EmptyState } from "@/components/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import type { RankedProduct, SearchFilters, SearchResponseBody } from "@/lib/types";
+import { addRecentSearch, getRecentSearches, removeRecentSearch } from "@/lib/recent-searches";
 
 const PAGE_SIZE = 9;
+const STORAGE_KEY = "vivatrip_search_state_v1";
 
 const QUICK_QUERIES = [
   "Villa Phan Thiết 15 khách khoảng 10 triệu",
   "Hạ Long 5 phòng ngủ dưới 15 triệu",
 ];
+
+interface SavedState {
+  query: string;
+  filters: SearchFilters;
+  results: RankedProduct[];
+  total: number;
+  hasSearched: boolean;
+  lastQuery: string;
+  scrollY: number;
+}
+
+function loadSavedState(): SavedState | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as SavedState) : null;
+  } catch {
+    return null;
+  }
+}
 
 export function SearchExperience({
   areas,
@@ -28,17 +50,63 @@ export function SearchExperience({
   hasAnyProducts: boolean;
   isAdmin: boolean;
 }) {
-  const [query, setQuery] = useState("");
-  const [filters, setFilters] = useState<SearchFilters>({});
+  // Khôi phục lại đúng lần tìm kiếm gần nhất (nếu có) ngay từ lần render đầu
+  // tiên — để bấm vào 1 sản phẩm rồi quay lại không bị mất kết quả đang xem.
+  const saved = useRef(loadSavedState()).current;
+
+  const [query, setQuery] = useState(saved?.query ?? "");
+  const [filters, setFilters] = useState<SearchFilters>(saved?.filters ?? {});
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
 
-  const [results, setResults] = useState<RankedProduct[]>([]);
-  const [total, setTotal] = useState(0);
+  const [results, setResults] = useState<RankedProduct[]>(saved?.results ?? []);
+  const [total, setTotal] = useState(saved?.total ?? 0);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [hasSearched, setHasSearched] = useState(false);
-  const [lastQuery, setLastQuery] = useState("");
+  const [hasSearched, setHasSearched] = useState(saved?.hasSearched ?? false);
+  const [lastQuery, setLastQuery] = useState(saved?.lastQuery ?? "");
   const [error, setError] = useState<string | null>(null);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
+
+  useEffect(() => {
+    setRecentSearches(getRecentSearches());
+  }, []);
+
+  // Khôi phục vị trí cuộn sau khi nội dung đã render lại đầy đủ
+  useEffect(() => {
+    if (saved?.scrollY) {
+      requestAnimationFrame(() => window.scrollTo(0, saved.scrollY));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function persist(next: Partial<SavedState>) {
+    if (typeof window === "undefined") return;
+    const current: SavedState = {
+      query,
+      filters,
+      results,
+      total,
+      hasSearched,
+      lastQuery,
+      scrollY: window.scrollY,
+      ...next,
+    };
+    try {
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(current));
+    } catch {
+      // sessionStorage đầy hoặc bị chặn -> bỏ qua, không ảnh hưởng chức năng tìm kiếm
+    }
+  }
+
+  // Lưu lại vị trí cuộn ngay trước khi rời trang (bấm vào 1 sản phẩm)
+  useEffect(() => {
+    function onVisibilityOrUnload() {
+      persist({ scrollY: window.scrollY });
+    }
+    window.addEventListener("pagehide", onVisibilityOrUnload);
+    return () => window.removeEventListener("pagehide", onVisibilityOrUnload);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  });
 
   const runSearch = useCallback(
     async (opts: { query: string; filters: SearchFilters; offset: number; append: boolean }) => {
@@ -60,21 +128,33 @@ export function SearchExperience({
         if (!res.ok) throw new Error("Tìm kiếm thất bại");
         const data: SearchResponseBody = await res.json();
 
-        setResults((prev) => (opts.append ? [...prev, ...data.results] : data.results));
+        const nextResults = opts.append ? [...results, ...data.results] : data.results;
+        setResults(nextResults);
         setTotal(data.total);
         setLastQuery(opts.query);
+        setHasSearched(true);
+        persist({
+          query: opts.query,
+          filters: opts.filters,
+          results: nextResults,
+          total: data.total,
+          lastQuery: opts.query,
+          hasSearched: true,
+          scrollY: 0,
+        });
       } catch {
         setError("Có lỗi khi tìm sản phẩm. Vui lòng thử lại.");
       } finally {
         setLoading(false);
         setLoadingMore(false);
-        setHasSearched(true);
       }
     },
-    []
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [results]
   );
 
   function handleSubmitQuery() {
+    if (query.trim()) setRecentSearches(addRecentSearch(query));
     runSearch({ query, filters, offset: 0, append: false });
   }
 
@@ -136,18 +216,37 @@ export function SearchExperience({
         <FilterBar areas={areas} value={filters} onApply={handleApplyFilters} />
 
         {!hasSearched && (
-          <div className="flex flex-wrap gap-1.5">
-            {QUICK_QUERIES.map((q) => (
-              <button
+          <div className="flex flex-wrap items-center gap-1.5">
+            {recentSearches.length > 0 && (
+              <span className="text-[11px] font-medium text-ink-muted">Tìm gần đây:</span>
+            )}
+            {(recentSearches.length > 0 ? recentSearches : QUICK_QUERIES).map((q) => (
+              <span
                 key={q}
-                onClick={() => {
-                  setQuery(q);
-                  runSearch({ query: q, filters, offset: 0, append: false });
-                }}
-                className="rounded-full border border-border bg-white px-3 py-1 text-[11.5px] text-ink-muted hover:bg-paper-dim hover:text-ink"
+                className="group inline-flex items-center gap-1 rounded-full border border-border bg-white pl-3 pr-1.5 py-1 text-[11.5px] text-ink-muted hover:bg-paper-dim hover:text-ink"
               >
-                {q}
-              </button>
+                <button
+                  onClick={() => {
+                    setQuery(q);
+                    setRecentSearches(addRecentSearch(q));
+                    runSearch({ query: q, filters, offset: 0, append: false });
+                  }}
+                >
+                  {q}
+                </button>
+                {recentSearches.length > 0 && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setRecentSearches(removeRecentSearch(q));
+                    }}
+                    className="rounded-full p-0.5 text-ink-muted/60 hover:text-danger"
+                    aria-label="Xóa"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
+              </span>
             ))}
           </div>
         )}

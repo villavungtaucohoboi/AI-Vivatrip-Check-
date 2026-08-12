@@ -23,6 +23,10 @@ function parsePriceFromText(text: string): number | null {
   m = text.match(/\b(\d{6,})\b/);
   if (m) return parseInt(m[1], 10);
 
+  // "2200k", "1900k" — giá phòng khách sạn hay viết tắt đơn vị nghìn
+  m = text.match(/(\d+(?:[.,]\d+)?)\s*k\b/i);
+  if (m) return Math.round(parseFloat(m[1].replace(",", ".")) * 1_000);
+
   // "thu 9,5", "thu 7", "thu 10,5" — cách viết tắt phổ biến của sale, ngầm hiểu
   // đơn vị triệu (giá villa/khách sạn theo ngày không ai viết đơn vị nghìn/đồng).
   m = text.match(/\bthu\b\s*:?\s*(\d+(?:[.,]\d+)?)\b/i);
@@ -63,29 +67,36 @@ function parseDateFromText(text: string, year: number): DateMatchInfo | null {
   return null;
 }
 
-// Bỏ các ký tự trang trí hay gặp (emoji check, gạch đầu dòng, hai chấm...) để
-// kiểm tra xem sau khi bỏ ngày, dòng có còn nội dung gì đáng kể không.
+// Bỏ emoji/ký tự trang trí hay gặp (📍✅👉 gạch đầu dòng, hai chấm...) để lấy
+// phần chữ thật sự còn lại trong dòng.
 function stripDecoration(s: string): string {
   return s
-    .replace(/[\u2700-\u27bf\u2600-\u26ff\u2000-\u206f\ufe0f]/gu, "")
-    .replace(/[-–—:.,•*]+/g, "")
+    .replace(/[\u{1F300}-\u{1FAFF}\u2700-\u27bf\u2600-\u26ff\u2000-\u206f\ufe0f]/gu, "")
+    .replace(/[-–—:.,•*]+/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
 /**
  * Tách nội dung sale paste thành danh sách { name, ngày quỹ, giá }.
  *
- * Hỗ trợ 2 kiểu viết:
- * 1. Ngày đi kèm ngay trên từng dòng: "Mộc villa sóc sơn 29/8 - 9tr"
- * 2. Ngày viết riêng 1 dòng, áp dụng cho các dòng villa phía dưới cho tới khi
- *    gặp dòng ngày tiếp theo (kiểu sale hay dùng thực tế):
+ * Hỗ trợ các kiểu viết thực tế hay gặp:
+ * 1. Tên + ngày + giá chung 1 dòng: "Mộc villa sóc sơn 29/8 - 9tr"
+ * 2. Dòng NGÀY riêng, áp dụng cho các dòng villa phía dưới:
  *      22/8 :
  *      -5PN B house sóc sơn ... thu 9,5 ...
- *      -5PN Tekapo sóc sơn ... thu 10,5 ...
+ * 3. Dòng TÊN khách sạn riêng (thường có 📍), áp dụng cho các dòng ngày/giá
+ *    phía dưới cho tới khi gặp tên khách sạn tiếp theo:
+ *      📍 Mường Thanh Luxury Centre 1 (TÒA A) ăn 2 bữa
+ *      • 29/08: 20p Deluxe city x 2200k
+ *      • 30/08: 20p Deluxe city x 1900k
  *
- * Không đoán khi không chắc — trường nào không nhận diện được sẽ để null,
- * nhưng raw_line luôn giữ nguyên văn dòng gốc, và dòng "chỉ có ngày" không bị
- * tính là 1 quỹ (chỉ dùng để cập nhật ngày áp dụng cho các dòng sau).
+ * Nguyên tắc: 1 dòng chỉ được tính là 1 quỹ khi xác định được cả NGÀY lẫn GIÁ
+ * (dù ngày/tên có thể kế thừa từ dòng tiêu đề phía trên). Dòng chỉ có ngày mà
+ * không có giá (tiêu đề ngày, dòng banner nhắc tới ngày...) hoặc chỉ có chữ mà
+ * không có ngày lẫn giá (tên khách sạn, ghi chú...) được dùng để cập nhật ngữ
+ * cảnh (ngày/tên hiện hành) chứ không tạo thành 1 quỹ riêng — tránh đếm lố.
+ * raw_line luôn giữ nguyên văn dòng gốc.
  */
 export function parseHolidayFundText(rawText: string, defaultYear: number): ParsedFundLine[] {
   const lines = rawText
@@ -95,40 +106,45 @@ export function parseHolidayFundText(rawText: string, defaultYear: number): Pars
 
   const results: ParsedFundLine[] = [];
   let currentDate: DateMatchInfo | null = null;
+  let currentPropertyName: string | null = null;
 
   for (const line of lines) {
-    const dateInfo = parseDateFromText(line, defaultYear);
+    // Dòng ghi chú tiếp nối (tiền cọc...) của quỹ ngay phía trên -> bỏ qua.
+    if (/^[-–—•*]*\s*cọc\b/i.test(line)) continue;
 
-    if (dateInfo) {
+    const dateInfo = parseDateFromText(line, defaultYear);
+    const price = parsePriceFromText(line);
+
+    // Có ngày nhưng không có giá -> dòng tiêu đề ngày/banner, không phải 1 quỹ.
+    // Vẫn cập nhật ngày hiện hành cho các dòng sau (nếu dòng đó thực sự là header ngày).
+    if (dateInfo && price == null) {
       const before = stripDecoration(line.slice(0, dateInfo.index));
       const after = stripDecoration(line.slice(dateInfo.index + dateInfo.length));
-      if (!before && !after) {
-        currentDate = dateInfo;
-        continue;
-      }
+      if (!before && !after) currentDate = dateInfo;
+      continue;
     }
 
-    // Dòng ghi chú tiếp nối (tiền cọc...) của villa ngay phía trên, không phải
-    // 1 villa mới -> bỏ qua, tránh tính lố thành 1 quỹ riêng.
-    if (!dateInfo && /^[-–—•*]*\s*cọc\b/i.test(line)) {
+    // Không có ngày và không có giá -> dòng tên khách sạn/ghi chú, dùng làm
+    // "tên hiện hành" cho các dòng ngày/giá phía dưới, không tạo thành 1 quỹ.
+    if (!dateInfo && price == null) {
+      const cleaned = stripDecoration(line);
+      if (cleaned.length >= 2) currentPropertyName = cleaned;
       continue;
     }
 
     const effectiveDate = dateInfo ?? currentDate;
 
     let name: string;
-    let searchAfter: string;
     if (dateInfo) {
-      name = line.slice(0, dateInfo.index).trim().replace(/[-–—,]+$/, "").trim();
-      searchAfter = line.slice(dateInfo.index + dateInfo.length);
+      name = stripDecoration(line.slice(0, dateInfo.index));
     } else {
       const priceKeywordMatch = line.match(/\bthu\b/i);
       const cut = priceKeywordMatch ? priceKeywordMatch.index! : line.length;
-      name = line.slice(0, cut).trim().replace(/^[-–—•*]+/, "").trim();
-      searchAfter = line;
+      name = stripDecoration(line.slice(0, cut));
     }
-
-    const price = parsePriceFromText(searchAfter) ?? parsePriceFromText(line);
+    // Dòng ngày/giá không tự mang tên riêng (VD "• 29/08: 20p Deluxe city x 2200k")
+    // -> lấy tên khách sạn đang áp dụng từ dòng header phía trên.
+    if (!name && currentPropertyName) name = currentPropertyName;
 
     results.push({
       name: name || null,

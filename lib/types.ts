@@ -100,6 +100,7 @@ export interface SearchFilters {
   priceTo?: number;
   budget?: number; // ngân sách "khoảng X" dùng để xếp hạng theo độ gần giá
   date?: string; // YYYY-MM-DD — "Ngày đi", ảnh hưởng giá villa/resort
+  name?: string; // từ khoá tên sản phẩm, VD "doris" trích từ "Doris villa sóc sơn"
   pool?: boolean;
   near_beach?: boolean;
   sea_view?: boolean;

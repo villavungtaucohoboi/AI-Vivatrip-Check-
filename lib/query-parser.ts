@@ -51,6 +51,14 @@ const AMENITY_KEYWORDS: Record<
   near_lake: ["view ho", "gan ho", "sat ho", "canh ho"],
 };
 
+// Từ nối/chung chung hay gặp trong câu tìm kiếm — không có giá trị làm từ khoá tên sản phẩm
+const STOPWORDS = new Set([
+  "can", "tim", "co", "cho", "gia", "khoang", "tam", "toi", "da", "thieu", "duoi", "tren",
+  "nguoi", "khach", "phong", "ngu", "dem", "tai", "o", "va", "voi", "mot", "cac", "san",
+  "pham", "cua", "la", "nay", "do", "the", "day", "trong", "khong", "qua", "tu", "den",
+  "hoac", "hay", "muon", "xin", "chi", "chinh",
+]);
+
 function parseMoney(numStr: string, unit: string): number {
   const num = parseFloat(numStr.replace(",", "."));
   const u = normalize(unit);
@@ -198,6 +206,33 @@ export function parseQuery(
   if (AMENITY_KEYWORDS.bbq.some((k) => norm.includes(k))) filters.bbq = true;
   if (AMENITY_KEYWORDS.pickleball.some((k) => norm.includes(k))) filters.pickleball = true;
   if (AMENITY_KEYWORDS.near_lake.some((k) => norm.includes(k))) filters.near_lake = true;
+
+  // --- Tên sản phẩm: phần còn lại sau khi đã "trừ" hết khu vực/loại/ngày/giá/
+  // số khách/số phòng/tiện ích đã hiểu được. VD "Doris villa sóc sơn" sau khi
+  // trừ "villa" (loại) và "sóc sơn" (khu vực) còn lại "doris" -> tìm theo tên.
+  let remainder = norm;
+  if (filters.area) remainder = remainder.replace(normalize(filters.area), " ");
+  for (const { keywords, type } of TYPE_KEYWORDS) {
+    if (filters.type === type) keywords.forEach((k) => (remainder = remainder.replace(k, " ")));
+  }
+  remainder = remainder
+    .replace(/\b(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?\b/g, " ")
+    .replace(/\bhom nay\b|\bngay mai\b|\bngay kia\b|\bthu\s*[2-7]\b|\bchu nhat\b|\btuan sau\b|\btuan nay\b/g, " ")
+    .replace(/(\d+[.,]?\d*)\s*(ty|tr\b|trieu|k\b|nghin|ngan)/g, " ")
+    .replace(/(\d+)\s*(nguoi|khach|ng\b)/g, " ")
+    .replace(/(\d+)\s*(phong ngu|pn\b)/g, " ");
+  Object.values(AMENITY_KEYWORDS)
+    .flat()
+    .forEach((k) => (remainder = remainder.replace(k, " ")));
+
+  const nameWords = remainder
+    .split(/\s+/)
+    .map((w) => w.trim())
+    .filter((w) => w.length >= 2 && !STOPWORDS.has(w) && !/^\d+$/.test(w));
+
+  if (nameWords.length > 0) {
+    filters.name = nameWords.join(" ");
+  }
 
   return filters;
 }

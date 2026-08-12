@@ -10,7 +10,7 @@ export function ProductGrid({
   showBestMatch?: boolean;
 }) {
   return (
-    <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="grid grid-cols-2 gap-2.5 sm:gap-3.5 lg:grid-cols-3">
       {products.map((product, i) => (
         <ProductCard
           key={product.id}
