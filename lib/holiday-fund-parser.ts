@@ -23,6 +23,11 @@ function parsePriceFromText(text: string): number | null {
   m = text.match(/\b(\d{6,})\b/);
   if (m) return parseInt(m[1], 10);
 
+  // "thu 9,5", "thu 7", "thu 10,5" — cách viết tắt phổ biến của sale, ngầm hiểu
+  // đơn vị triệu (giá villa/khách sạn theo ngày không ai viết đơn vị nghìn/đồng).
+  m = text.match(/\bthu\b\s*:?\s*(\d+(?:[.,]\d+)?)\b/i);
+  if (m) return Math.round(parseFloat(m[1].replace(",", ".")) * 1_000_000);
+
   return null;
 }
 
@@ -58,10 +63,29 @@ function parseDateFromText(text: string, year: number): DateMatchInfo | null {
   return null;
 }
 
+// Bỏ các ký tự trang trí hay gặp (emoji check, gạch đầu dòng, hai chấm...) để
+// kiểm tra xem sau khi bỏ ngày, dòng có còn nội dung gì đáng kể không.
+function stripDecoration(s: string): string {
+  return s
+    .replace(/[\u2700-\u27bf\u2600-\u26ff\u2000-\u206f\ufe0f]/gu, "")
+    .replace(/[-–—:.,•*]+/g, "")
+    .trim();
+}
+
 /**
- * Tách 1 dòng text sale paste thành { name, ngày quỹ, giá }.
+ * Tách nội dung sale paste thành danh sách { name, ngày quỹ, giá }.
+ *
+ * Hỗ trợ 2 kiểu viết:
+ * 1. Ngày đi kèm ngay trên từng dòng: "Mộc villa sóc sơn 29/8 - 9tr"
+ * 2. Ngày viết riêng 1 dòng, áp dụng cho các dòng villa phía dưới cho tới khi
+ *    gặp dòng ngày tiếp theo (kiểu sale hay dùng thực tế):
+ *      22/8 :
+ *      -5PN B house sóc sơn ... thu 9,5 ...
+ *      -5PN Tekapo sóc sơn ... thu 10,5 ...
+ *
  * Không đoán khi không chắc — trường nào không nhận diện được sẽ để null,
- * nhưng raw_line luôn giữ nguyên văn dòng gốc.
+ * nhưng raw_line luôn giữ nguyên văn dòng gốc, và dòng "chỉ có ngày" không bị
+ * tính là 1 quỹ (chỉ dùng để cập nhật ngày áp dụng cho các dòng sau).
  */
 export function parseHolidayFundText(rawText: string, defaultYear: number): ParsedFundLine[] {
   const lines = rawText
@@ -69,23 +93,51 @@ export function parseHolidayFundText(rawText: string, defaultYear: number): Pars
     .map((l) => l.trim())
     .filter((l) => l.length > 0);
 
-  return lines.map((line) => {
-    const dateInfo = parseDateFromText(line, defaultYear);
-    let name = line;
-    let searchAfter = line;
+  const results: ParsedFundLine[] = [];
+  let currentDate: DateMatchInfo | null = null;
 
+  for (const line of lines) {
+    const dateInfo = parseDateFromText(line, defaultYear);
+
+    if (dateInfo) {
+      const before = stripDecoration(line.slice(0, dateInfo.index));
+      const after = stripDecoration(line.slice(dateInfo.index + dateInfo.length));
+      if (!before && !after) {
+        currentDate = dateInfo;
+        continue;
+      }
+    }
+
+    // Dòng ghi chú tiếp nối (tiền cọc...) của villa ngay phía trên, không phải
+    // 1 villa mới -> bỏ qua, tránh tính lố thành 1 quỹ riêng.
+    if (!dateInfo && /^[-–—•*]*\s*cọc\b/i.test(line)) {
+      continue;
+    }
+
+    const effectiveDate = dateInfo ?? currentDate;
+
+    let name: string;
+    let searchAfter: string;
     if (dateInfo) {
       name = line.slice(0, dateInfo.index).trim().replace(/[-–—,]+$/, "").trim();
       searchAfter = line.slice(dateInfo.index + dateInfo.length);
+    } else {
+      const priceKeywordMatch = line.match(/\bthu\b/i);
+      const cut = priceKeywordMatch ? priceKeywordMatch.index! : line.length;
+      name = line.slice(0, cut).trim().replace(/^[-–—•*]+/, "").trim();
+      searchAfter = line;
     }
+
     const price = parsePriceFromText(searchAfter) ?? parsePriceFromText(line);
 
-    return {
+    results.push({
       name: name || null,
-      fund_date_iso: dateInfo ? dateInfo.iso : null,
-      fund_date_display: dateInfo ? dateInfo.display : null,
+      fund_date_iso: effectiveDate ? effectiveDate.iso : null,
+      fund_date_display: effectiveDate ? effectiveDate.display : null,
       price,
       raw_line: line,
-    };
-  });
+    });
+  }
+
+  return results;
 }
