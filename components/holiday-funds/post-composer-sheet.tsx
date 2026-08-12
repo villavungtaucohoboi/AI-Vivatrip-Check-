@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
 import { getPosterToken, getSavedAuthorName, saveAuthorName } from "@/lib/holiday-fund-identity";
+import { compressImage } from "@/lib/compress-image";
 import type { HolidayFundPost } from "@/lib/holiday-fund-types";
 
 function sanitizeFileName(name: string): string {
@@ -78,10 +79,11 @@ export function PostComposerSheet({
     try {
       const uploadedUrls: string[] = [...existingImageUrls];
       for (const file of newFiles) {
-        const path = `${sheetId}/${Date.now()}-${sanitizeFileName(file.name)}`;
+        const compressed = await compressImage(file);
+        const path = `${sheetId}/${Date.now()}-${sanitizeFileName(compressed.name)}`;
         const { error: uploadError } = await supabase.storage
           .from("holiday-fund-images")
-          .upload(path, file, { upsert: true });
+          .upload(path, compressed, { upsert: true });
         if (uploadError) throw new Error(`Lỗi upload ảnh: ${uploadError.message}`);
         const { data } = supabase.storage.from("holiday-fund-images").getPublicUrl(path);
         uploadedUrls.push(data.publicUrl);

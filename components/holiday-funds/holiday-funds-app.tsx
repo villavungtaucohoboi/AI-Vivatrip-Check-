@@ -6,6 +6,7 @@ import { Loader2, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { getPosterToken } from "@/lib/holiday-fund-identity";
+import { useClientRole } from "@/lib/use-client-role";
 import { EmptyState } from "@/components/empty-state";
 import { PostComposerSheet } from "@/components/holiday-funds/post-composer-sheet";
 import { SummaryView } from "@/components/holiday-funds/summary-view";
@@ -16,11 +17,12 @@ import type { HolidayFundPost, HolidayFundSheet } from "@/lib/holiday-fund-types
 
 export function HolidayFundsApp({
   initialSheets,
-  isAdmin,
+  isAdmin: initialIsAdmin,
 }: {
   initialSheets: HolidayFundSheet[];
   isAdmin: boolean;
 }) {
+  const isAdmin = useClientRole(initialIsAdmin ? "admin" : "sale") === "admin";
   const router = useRouter();
   const supabase = createClient();
 

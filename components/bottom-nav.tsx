@@ -4,9 +4,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { PartyPopper, Plus, Search, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useClientRole } from "@/lib/use-client-role";
 import type { UserRole } from "@/lib/types";
 
-export function BottomNav({ role }: { role: UserRole }) {
+export function BottomNav({ role: initialRole }: { role: UserRole }) {
+  const role = useClientRole(initialRole);
   const pathname = usePathname();
   const onHolidayFunds = pathname.startsWith("/holiday-funds");
 

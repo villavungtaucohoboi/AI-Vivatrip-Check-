@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import type { ImportRow } from "@/lib/types";
 
@@ -49,6 +50,10 @@ export async function POST(req: NextRequest) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  revalidatePath("/admin/products");
+  revalidatePath("/search");
+  revalidateTag("products");
 
   return NextResponse.json({ ok: true, processed: payload.length });
 }

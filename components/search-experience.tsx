@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import type { RankedProduct, SearchFilters, SearchResponseBody } from "@/lib/types";
 import { addRecentSearch, getRecentSearches, removeRecentSearch } from "@/lib/recent-searches";
+import { useClientRole } from "@/lib/use-client-role";
 
 const PAGE_SIZE = 9;
 const STORAGE_KEY = "vivatrip_search_state_v1";
@@ -44,12 +45,14 @@ function loadSavedState(): SavedState | null {
 export function SearchExperience({
   areas,
   hasAnyProducts,
-  isAdmin,
+  isAdmin: initialIsAdmin,
 }: {
   areas: string[];
   hasAnyProducts: boolean;
   isAdmin: boolean;
 }) {
+  const isAdmin = useClientRole(initialIsAdmin ? "admin" : "sale") === "admin";
+
   // Khôi phục lại đúng lần tìm kiếm gần nhất (nếu có) ngay từ lần render đầu
   // tiên — để bấm vào 1 sản phẩm rồi quay lại không bị mất kết quả đang xem.
   const saved = useRef(loadSavedState()).current;

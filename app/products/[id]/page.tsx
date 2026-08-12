@@ -14,7 +14,6 @@ import {
   Waves,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { isAdminSession } from "@/lib/admin-auth";
 import { Header } from "@/components/header";
 import { BottomNav } from "@/components/bottom-nav";
 import { ProductGallery } from "@/components/product-gallery";
@@ -48,6 +47,8 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
+export const revalidate = 30;
+
 export default async function ProductDetailPage({
   params,
   searchParams,
@@ -58,7 +59,7 @@ export default async function ProductDetailPage({
   const { id } = await params;
   const { date } = await searchParams;
   const supabase = await createClient();
-  const role = (await isAdminSession()) ? "admin" : "sale";
+  const role = "sale" as const;
 
   const { data: productRow } = await supabase.from("products").select("*").eq("id", id).single();
 

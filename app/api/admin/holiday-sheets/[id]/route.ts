@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -9,6 +10,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { error } = await supabase.from("holiday_fund_sheets").update(body).eq("id", id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  revalidatePath("/holiday-funds");
   return NextResponse.json({ ok: true });
 }
 
@@ -18,5 +20,6 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
   const { error } = await supabase.from("holiday_fund_sheets").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  revalidatePath("/holiday-funds");
   return NextResponse.json({ ok: true });
 }

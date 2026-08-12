@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { mapError, type ProductInput } from "@/lib/admin-types";
 
@@ -18,11 +18,15 @@ export async function POST(req: NextRequest) {
     if (error) return NextResponse.json({ error: mapError(error.message) }, { status: 400 });
     revalidatePath("/admin/products");
     revalidatePath(`/products/${id}`);
+    revalidatePath("/search");
+    revalidateTag("products");
     return NextResponse.json({ id });
   }
 
   const { data, error } = await supabase.from("products").insert(payload).select("id").single();
   if (error) return NextResponse.json({ error: mapError(error.message) }, { status: 400 });
   revalidatePath("/admin/products");
+  revalidatePath("/search");
+  revalidateTag("products");
   return NextResponse.json({ id: data.id });
 }

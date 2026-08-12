@@ -4,9 +4,11 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Lock, PartyPopper, Plus, Search, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useClientRole } from "@/lib/use-client-role";
 import type { UserRole } from "@/lib/types";
 
-export function Header({ role }: { role: UserRole }) {
+export function Header({ role: initialRole }: { role: UserRole }) {
+  const role = useClientRole(initialRole);
   const pathname = usePathname();
   const router = useRouter();
   const inAdminArea = pathname.startsWith("/admin");

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
 export async function POST(req: NextRequest) {
@@ -15,5 +15,6 @@ export async function POST(req: NextRequest) {
   }
 
   revalidatePath("/admin/holidays");
+  revalidateTag("holidays");
   return NextResponse.json({ ok: true });
 }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -26,5 +26,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   revalidatePath(`/admin/products/${productId}/edit`);
   revalidatePath(`/products/${productId}`);
   revalidatePath("/search");
+  revalidateTag("products");
   return NextResponse.json({ ok: true });
 }

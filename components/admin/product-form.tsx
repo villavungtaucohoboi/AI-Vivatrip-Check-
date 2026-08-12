@@ -19,6 +19,7 @@ import { PriceInput } from "@/components/ui/price-input";
 import { DiscountValueInput } from "@/components/admin/discount-value-input";
 import { HotelRateEditor } from "@/components/admin/hotel-rate-editor";
 import { cn } from "@/lib/utils";
+import { compressImage } from "@/lib/compress-image";
 import { PRODUCT_TYPE_LABEL, type HotelRate, type Product, type ProductImage as ProductImageRow } from "@/lib/types";
 
 interface ExistingImage {
@@ -185,10 +186,11 @@ export function ProductForm({
         if (item.kind === "existing") {
           finalUrls.push(item.url);
         } else {
-          const path = `${productId}/${Date.now()}-${sanitizeFileName(item.file.name)}`;
+          const compressed = await compressImage(item.file);
+          const path = `${productId}/${Date.now()}-${sanitizeFileName(compressed.name)}`;
           const { error: uploadError } = await supabase.storage
             .from("product-images")
-            .upload(path, item.file, { upsert: true });
+            .upload(path, compressed, { upsert: true });
 
           if (uploadError) {
             throw new Error(`Lỗi upload ảnh: ${uploadError.message}`);
