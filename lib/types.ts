@@ -37,7 +37,7 @@ export interface Product {
   price_weekday: number | null;
   price_friday_sunday: number | null;
   price_saturday_holiday: number | null;
-  /** uniform: dùng discount_type/discount_value cho cả 3 khung. by_day_type: dùng discount_weekday_*/discount_weekend_* */
+  /** uniform: dùng discount_type/discount_value cho cả 3 khung. by_day_type: dùng discount_weekday_type/value và discount_weekend_type/value */
   discount_scheme: DiscountScheme;
   discount_type: DiscountType;
   discount_value: number;
