@@ -32,9 +32,12 @@ export async function POST(req: NextRequest) {
     discount_weekday_type:
       r.type === "hotel" ? "percent" : (r.discount_weekday_type as "percent" | "amount") || "percent",
     discount_weekday_value: r.type === "hotel" ? 0 : r.discount_weekday_value ?? 0,
-    discount_weekend_type:
-      r.type === "hotel" ? "percent" : (r.discount_weekend_type as "percent" | "amount") || "percent",
-    discount_weekend_value: r.type === "hotel" ? 0 : r.discount_weekend_value ?? 0,
+    discount_friday_sunday_type:
+      r.type === "hotel" ? "percent" : (r.discount_friday_sunday_type as "percent" | "amount") || "percent",
+    discount_friday_sunday_value: r.type === "hotel" ? 0 : r.discount_friday_sunday_value ?? 0,
+    discount_saturday_holiday_type:
+      r.type === "hotel" ? "percent" : (r.discount_saturday_holiday_type as "percent" | "amount") || "percent",
+    discount_saturday_holiday_value: r.type === "hotel" ? 0 : r.discount_saturday_holiday_value ?? 0,
     pool: !!r.pool,
     near_beach: !!r.near_beach,
     sea_view: !!r.sea_view,

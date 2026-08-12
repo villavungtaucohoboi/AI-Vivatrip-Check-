@@ -15,8 +15,10 @@ type PricingProduct = Pick<
   | "discount_value"
   | "discount_weekday_type"
   | "discount_weekday_value"
-  | "discount_weekend_type"
-  | "discount_weekend_value"
+  | "discount_friday_sunday_type"
+  | "discount_friday_sunday_value"
+  | "discount_saturday_holiday_type"
+  | "discount_saturday_holiday_value"
 >;
 
 export function VillaPricingTable({
@@ -32,12 +34,12 @@ export function VillaPricingTable({
     saturday_holiday: product.price_saturday_holiday,
   };
 
-  const weekdayDiscount = getDiscountForTier(product, "weekday");
-  const weekendDiscount = getDiscountForTier(product, "saturday_holiday");
   const hasAnyDiscount =
     product.discount_scheme === "uniform"
       ? product.discount_value > 0
-      : product.discount_weekday_value > 0 || product.discount_weekend_value > 0;
+      : product.discount_weekday_value > 0 ||
+        product.discount_friday_sunday_value > 0 ||
+        product.discount_saturday_holiday_value > 0;
 
   return (
     <div className="space-y-3">
@@ -90,18 +92,15 @@ export function VillaPricingTable({
             </p>
           ) : (
             <div className="space-y-0.5">
-              <p>
-                Chiết khấu ngày thường:{" "}
-                <span className="font-semibold text-ink">
-                  {formatDiscount(weekdayDiscount.type, weekdayDiscount.value)}
-                </span>
-              </p>
-              <p>
-                Chiết khấu cuối tuần & lễ:{" "}
-                <span className="font-semibold text-ink">
-                  {formatDiscount(weekendDiscount.type, weekendDiscount.value)}
-                </span>
-              </p>
+              {TIERS.map((tier) => {
+                const d = getDiscountForTier(product, tier);
+                return (
+                  <p key={tier}>
+                    Chiết khấu {TIER_LABEL[tier]}:{" "}
+                    <span className="font-semibold text-ink">{formatDiscount(d.type, d.value)}</span>
+                  </p>
+                );
+              })}
             </div>
           )}
         </div>

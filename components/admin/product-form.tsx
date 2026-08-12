@@ -106,8 +106,10 @@ export function ProductForm({
     discount_value: product?.discount_value ?? 0,
     discount_weekday_type: product?.discount_weekday_type ?? "percent",
     discount_weekday_value: product?.discount_weekday_value ?? 0,
-    discount_weekend_type: product?.discount_weekend_type ?? "percent",
-    discount_weekend_value: product?.discount_weekend_value ?? 0,
+    discount_friday_sunday_type: product?.discount_friday_sunday_type ?? "percent",
+    discount_friday_sunday_value: product?.discount_friday_sunday_value ?? 0,
+    discount_saturday_holiday_type: product?.discount_saturday_holiday_type ?? "percent",
+    discount_saturday_holiday_value: product?.discount_saturday_holiday_value ?? 0,
     pool: product?.pool ?? false,
     near_beach: product?.near_beach ?? false,
     sea_view: product?.sea_view ?? false,
@@ -400,7 +402,7 @@ export function ProductForm({
                       : "text-ink-muted hover:bg-paper-dim"
                   )}
                 >
-                  Mục 2: Ngày thường / cuối tuần riêng
+                  Mục 2: Tách riêng từng khung ngày
                 </button>
               </div>
 
@@ -415,7 +417,7 @@ export function ProductForm({
                 <div className="space-y-3">
                   <div>
                     <p className="mb-1.5 text-xs font-medium text-ink-muted">
-                      Chiết khấu ngày thường (Thứ 2 - Thứ 5)
+                      Chiết khấu Thứ 2 - Thứ 5
                     </p>
                     <DiscountValueInput
                       type={form.discount_weekday_type}
@@ -426,13 +428,24 @@ export function ProductForm({
                   </div>
                   <div>
                     <p className="mb-1.5 text-xs font-medium text-ink-muted">
-                      Chiết khấu cuối tuần & lễ (Thứ 6, Thứ 7, Chủ nhật, Ngày lễ)
+                      Chiết khấu Thứ 6 & Chủ nhật
                     </p>
                     <DiscountValueInput
-                      type={form.discount_weekend_type}
-                      value={form.discount_weekend_value}
-                      onTypeChange={(t) => set("discount_weekend_type", t)}
-                      onValueChange={(v) => set("discount_weekend_value", v)}
+                      type={form.discount_friday_sunday_type}
+                      value={form.discount_friday_sunday_value}
+                      onTypeChange={(t) => set("discount_friday_sunday_type", t)}
+                      onValueChange={(v) => set("discount_friday_sunday_value", v)}
+                    />
+                  </div>
+                  <div>
+                    <p className="mb-1.5 text-xs font-medium text-ink-muted">
+                      Chiết khấu Thứ 7 & Ngày lễ
+                    </p>
+                    <DiscountValueInput
+                      type={form.discount_saturday_holiday_type}
+                      value={form.discount_saturday_holiday_value}
+                      onTypeChange={(t) => set("discount_saturday_holiday_type", t)}
+                      onValueChange={(v) => set("discount_saturday_holiday_value", v)}
                     />
                   </div>
                 </div>
