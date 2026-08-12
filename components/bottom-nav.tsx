@@ -2,15 +2,17 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Plus, Search, Settings } from "lucide-react";
+import { PartyPopper, Plus, Search, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/lib/types";
 
 export function BottomNav({ role }: { role: UserRole }) {
   const pathname = usePathname();
+  const onHolidayFunds = pathname.startsWith("/holiday-funds");
 
   const items = [
     { href: "/search", label: "Tìm sản phẩm", icon: Search },
+    { href: "/holiday-funds", label: "Quỹ ngày lễ", icon: PartyPopper },
     ...(role === "admin"
       ? [{ href: "/admin/products", label: "Quản lý", icon: Settings }]
       : []),
@@ -18,7 +20,7 @@ export function BottomNav({ role }: { role: UserRole }) {
 
   return (
     <>
-      {role === "admin" && (
+      {role === "admin" && !onHolidayFunds && (
         <Link
           href="/admin/products/new"
           className="fixed bottom-20 right-4 z-30 flex items-center justify-center rounded-full bg-teal text-white shadow-float sm:hidden"

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Lock, Plus, Search, Settings } from "lucide-react";
+import { Lock, PartyPopper, Plus, Search, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/lib/types";
 
@@ -46,6 +46,7 @@ export function Header({ role }: { role: UserRole }) {
 
         <nav className="hidden items-center gap-1.5 sm:flex">
           {navItem("/search", "Tìm sản phẩm", Search)}
+          {navItem("/holiday-funds", "Quỹ ngày lễ", PartyPopper)}
           {role === "admin" && navItem("/admin/products", "Quản lý sản phẩm", Settings)}
           {role === "admin" && (
             <Link href="/admin/products/new">
