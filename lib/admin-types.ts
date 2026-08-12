@@ -20,8 +20,10 @@ export interface ProductInput {
   discount_value: number;
   discount_weekday_type: "percent" | "amount";
   discount_weekday_value: number;
-  discount_weekend_type: "percent" | "amount";
-  discount_weekend_value: number;
+  discount_friday_sunday_type: "percent" | "amount";
+  discount_friday_sunday_value: number;
+  discount_saturday_holiday_type: "percent" | "amount";
+  discount_saturday_holiday_value: number;
   pool: boolean;
   near_beach: boolean;
   sea_view: boolean;

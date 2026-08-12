@@ -71,9 +71,8 @@ export function calculateDiscount(
  * Lấy đúng cấu hình chiết khấu (loại + giá trị) áp dụng cho 1 khung giá,
  * tuỳ theo chế độ sản phẩm đang chọn:
  * - "uniform": 1 mức chiết khấu chung cho cả 3 khung (Mục 1)
- * - "by_day_type": ngày thường (weekday) dùng 1 mức riêng, "cuối tuần"
- *   (Thứ 6, Thứ 7, Chủ nhật, Ngày lễ — tức 2 khung friday_sunday +
- *   saturday_holiday) dùng chung 1 mức khác (Mục 2)
+ * - "by_day_type": mỗi khung (Thứ 2-Thứ 5 / Thứ 6 & CN / Thứ 7 & Lễ) có
+ *   mức chiết khấu RIÊNG, không gộp chung (Mục 2)
  */
 export function getDiscountForTier(
   product: Pick<
@@ -83,15 +82,21 @@ export function getDiscountForTier(
     | "discount_value"
     | "discount_weekday_type"
     | "discount_weekday_value"
-    | "discount_weekend_type"
-    | "discount_weekend_value"
+    | "discount_friday_sunday_type"
+    | "discount_friday_sunday_value"
+    | "discount_saturday_holiday_type"
+    | "discount_saturday_holiday_value"
   >,
   tier: PriceTier
 ): { type: DiscountType; value: number } {
   if (product.discount_scheme === "by_day_type") {
-    return tier === "weekday"
-      ? { type: product.discount_weekday_type, value: product.discount_weekday_value }
-      : { type: product.discount_weekend_type, value: product.discount_weekend_value };
+    if (tier === "weekday") {
+      return { type: product.discount_weekday_type, value: product.discount_weekday_value };
+    }
+    if (tier === "friday_sunday") {
+      return { type: product.discount_friday_sunday_type, value: product.discount_friday_sunday_value };
+    }
+    return { type: product.discount_saturday_holiday_type, value: product.discount_saturday_holiday_value };
   }
   return { type: product.discount_type, value: product.discount_value };
 }
@@ -133,8 +138,10 @@ type PricingProduct = Pick<
   | "discount_value"
   | "discount_weekday_type"
   | "discount_weekday_value"
-  | "discount_weekend_type"
-  | "discount_weekend_value"
+  | "discount_friday_sunday_type"
+  | "discount_friday_sunday_value"
+  | "discount_saturday_holiday_type"
+  | "discount_saturday_holiday_value"
 >;
 
 /**

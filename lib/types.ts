@@ -37,14 +37,16 @@ export interface Product {
   price_weekday: number | null;
   price_friday_sunday: number | null;
   price_saturday_holiday: number | null;
-  /** uniform: dùng discount_type/discount_value cho cả 3 khung. by_day_type: dùng discount_weekday_type/value và discount_weekend_type/value */
+  /** uniform: dùng discount_type/discount_value cho cả 3 khung. by_day_type: dùng riêng từng khung — discount_weekday_*, discount_friday_sunday_*, discount_saturday_holiday_* */
   discount_scheme: DiscountScheme;
   discount_type: DiscountType;
   discount_value: number;
   discount_weekday_type: DiscountType;
   discount_weekday_value: number;
-  discount_weekend_type: DiscountType;
-  discount_weekend_value: number;
+  discount_friday_sunday_type: DiscountType;
+  discount_friday_sunday_value: number;
+  discount_saturday_holiday_type: DiscountType;
+  discount_saturday_holiday_value: number;
   pool: boolean;
   near_beach: boolean;
   sea_view: boolean;
@@ -158,8 +160,10 @@ export interface ImportRow {
   discount_value?: number;
   discount_weekday_type?: string;
   discount_weekday_value?: number;
-  discount_weekend_type?: string;
-  discount_weekend_value?: number;
+  discount_friday_sunday_type?: string;
+  discount_friday_sunday_value?: number;
+  discount_saturday_holiday_type?: string;
+  discount_saturday_holiday_value?: number;
   pool?: boolean;
   near_beach?: boolean;
   sea_view?: boolean;
