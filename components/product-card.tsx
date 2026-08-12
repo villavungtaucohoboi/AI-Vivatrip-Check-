@@ -1,17 +1,20 @@
 import Link from "next/link";
-import { BedDouble, MapPin, Users, Waves, Music2, Flame, Home } from "lucide-react";
+import { BedDouble, MapPin, Users, Waves, Music2, Flame, Home, Droplet, Dumbbell, Eye } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ProductImage } from "@/components/product-image";
 import { formatVND, formatVNDShort } from "@/lib/format";
-import { formatDateVN, TIER_LABEL_SHORT } from "@/lib/pricing";
+import { formatDateVN, formatDiscount, TIER_LABEL_SHORT } from "@/lib/pricing";
 import { PRODUCT_TYPE_LABEL, type DatePricingContext, type Product } from "@/lib/types";
 
 const AMENITY_ICONS = [
   { key: "pool" as const, label: "Hồ bơi", Icon: Waves },
-  { key: "near_beach" as const, label: "Gần biển", Icon: Home },
+  { key: "near_beach" as const, label: "Sát biển", Icon: Home },
+  { key: "sea_view" as const, label: "View biển", Icon: Eye },
+  { key: "near_lake" as const, label: "View hồ", Icon: Droplet },
   { key: "karaoke" as const, label: "Karaoke", Icon: Music2 },
   { key: "bbq" as const, label: "BBQ", Icon: Flame },
+  { key: "pickleball" as const, label: "Pickleball", Icon: Dumbbell },
 ];
 
 function PriceBlock({ product }: { product: Product & { _pricing?: DatePricingContext } }) {
@@ -30,7 +33,7 @@ function PriceBlock({ product }: { product: Product & { _pricing?: DatePricingCo
 
   // Có ngày cụ thể — hiển thị đúng 1 giá của ngày đó, không hiện giá weekday
   if (ctx && ctx.basePrice != null) {
-    const hasDiscount = ctx.discountPercent > 0 && ctx.finalPrice != null;
+    const hasDiscount = ctx.discountValue > 0 && ctx.finalPrice != null;
     return (
       <div>
         {hasDiscount && (
@@ -41,7 +44,7 @@ function PriceBlock({ product }: { product: Product & { _pricing?: DatePricingCo
         </p>
         <p className="mt-1 text-[11px] text-ink-muted">
           {TIER_LABEL_SHORT[ctx.tier]} · {formatDateVN(ctx.date)}
-          {hasDiscount && ` · CK ${ctx.discountPercent}%`}
+          {hasDiscount && ` · CK ${formatDiscount(ctx.discountType, ctx.discountValue)}`}
         </p>
       </div>
     );

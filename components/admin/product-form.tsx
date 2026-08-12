@@ -16,7 +16,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card } from "@/components/ui/card";
 import { PriceInput } from "@/components/ui/price-input";
+import { DiscountValueInput } from "@/components/admin/discount-value-input";
 import { HotelRateEditor } from "@/components/admin/hotel-rate-editor";
+import { cn } from "@/lib/utils";
 import { PRODUCT_TYPE_LABEL, type HotelRate, type Product, type ProductImage as ProductImageRow } from "@/lib/types";
 
 interface ExistingImage {
@@ -98,11 +100,20 @@ export function ProductForm({
     price_weekday: product?.price_weekday ?? null,
     price_friday_sunday: product?.price_friday_sunday ?? null,
     price_saturday_holiday: product?.price_saturday_holiday ?? null,
-    discount_percent: product?.discount_percent ?? 0,
+    discount_scheme: product?.discount_scheme ?? "uniform",
+    discount_type: product?.discount_type ?? "percent",
+    discount_value: product?.discount_value ?? 0,
+    discount_weekday_type: product?.discount_weekday_type ?? "percent",
+    discount_weekday_value: product?.discount_weekday_value ?? 0,
+    discount_weekend_type: product?.discount_weekend_type ?? "percent",
+    discount_weekend_value: product?.discount_weekend_value ?? 0,
     pool: product?.pool ?? false,
     near_beach: product?.near_beach ?? false,
+    sea_view: product?.sea_view ?? false,
     karaoke: product?.karaoke ?? false,
     bbq: product?.bbq ?? false,
+    pickleball: product?.pickleball ?? false,
+    near_lake: product?.near_lake ?? false,
     note: product?.note ?? "",
     google_maps_url: product?.google_maps_url ?? "",
   });
@@ -363,16 +374,67 @@ export function ProductForm({
               />
             </div>
             <div>
-              <Label htmlFor="discount_percent">Chiết khấu (%)</Label>
-              <Input
-                id="discount_percent"
-                type="number"
-                min={0}
-                max={100}
-                value={form.discount_percent ?? 0}
-                onChange={(e) => set("discount_percent", Number(e.target.value) || 0)}
-                placeholder="VD: 10"
-              />
+              <Label>Chiết khấu</Label>
+              <div className="mb-3 flex rounded-xl border border-border p-0.5">
+                <button
+                  type="button"
+                  onClick={() => set("discount_scheme", "uniform")}
+                  className={cn(
+                    "flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                    form.discount_scheme === "uniform"
+                      ? "bg-teal text-white"
+                      : "text-ink-muted hover:bg-paper-dim"
+                  )}
+                >
+                  Mục 1: Áp dụng chung 3 khung
+                </button>
+                <button
+                  type="button"
+                  onClick={() => set("discount_scheme", "by_day_type")}
+                  className={cn(
+                    "flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                    form.discount_scheme === "by_day_type"
+                      ? "bg-teal text-white"
+                      : "text-ink-muted hover:bg-paper-dim"
+                  )}
+                >
+                  Mục 2: Ngày thường / cuối tuần riêng
+                </button>
+              </div>
+
+              {form.discount_scheme === "uniform" ? (
+                <DiscountValueInput
+                  type={form.discount_type}
+                  value={form.discount_value}
+                  onTypeChange={(t) => set("discount_type", t)}
+                  onValueChange={(v) => set("discount_value", v)}
+                />
+              ) : (
+                <div className="space-y-3">
+                  <div>
+                    <p className="mb-1.5 text-xs font-medium text-ink-muted">
+                      Chiết khấu ngày thường (Thứ 2 - Thứ 5)
+                    </p>
+                    <DiscountValueInput
+                      type={form.discount_weekday_type}
+                      value={form.discount_weekday_value}
+                      onTypeChange={(t) => set("discount_weekday_type", t)}
+                      onValueChange={(v) => set("discount_weekday_value", v)}
+                    />
+                  </div>
+                  <div>
+                    <p className="mb-1.5 text-xs font-medium text-ink-muted">
+                      Chiết khấu cuối tuần & lễ (Thứ 6, Thứ 7, Chủ nhật, Ngày lễ)
+                    </p>
+                    <DiscountValueInput
+                      type={form.discount_weekend_type}
+                      value={form.discount_weekend_value}
+                      onTypeChange={(t) => set("discount_weekend_type", t)}
+                      onValueChange={(v) => set("discount_weekend_value", v)}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </>
         )}
@@ -380,7 +442,7 @@ export function ProductForm({
 
       <Card className="p-4 sm:p-5 space-y-3">
         <h2 className="font-display text-base text-ink">Tiện ích</h2>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <Checkbox
             id="pool"
             label="Hồ bơi"
@@ -389,9 +451,21 @@ export function ProductForm({
           />
           <Checkbox
             id="near_beach"
-            label="Gần biển"
+            label="Sát biển"
             checked={form.near_beach}
             onChange={(e) => set("near_beach", e.target.checked)}
+          />
+          <Checkbox
+            id="sea_view"
+            label="View biển"
+            checked={form.sea_view}
+            onChange={(e) => set("sea_view", e.target.checked)}
+          />
+          <Checkbox
+            id="near_lake"
+            label="View hồ"
+            checked={form.near_lake}
+            onChange={(e) => set("near_lake", e.target.checked)}
           />
           <Checkbox
             id="karaoke"
@@ -404,6 +478,12 @@ export function ProductForm({
             label="BBQ"
             checked={form.bbq}
             onChange={(e) => set("bbq", e.target.checked)}
+          />
+          <Checkbox
+            id="pickleball"
+            label="Sân pickleball"
+            checked={form.pickleball}
+            onChange={(e) => set("pickleball", e.target.checked)}
           />
         </div>
       </Card>

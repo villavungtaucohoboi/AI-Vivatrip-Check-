@@ -210,7 +210,11 @@ export function ImportWizard() {
       <p className="mx-auto mt-1 max-w-sm text-sm text-ink-muted">
         File .xlsx với các cột: product_code, product_name, type, area, address, bedrooms, beds,
         standard_guests, max_guests, price (chỉ hotel), price_weekday, price_friday_sunday,
-        price_saturday_holiday, discount_percent (chỉ villa/resort), pool, near_beach, karaoke, bbq, note.
+        price_saturday_holiday (chỉ villa/resort), discount_scheme (uniform/by_day_type),
+        discount_type, discount_value, discount_weekday_type, discount_weekday_value,
+        discount_weekend_type, discount_weekend_value (chỉ villa/resort, discount_type và
+        discount_weekday_type/discount_weekend_type nhận percent hoặc amount), pool, near_beach,
+        sea_view, near_lake, karaoke, bbq, pickleball, note.
       </p>
 
       <div className="mt-5 flex flex-col items-center gap-3">

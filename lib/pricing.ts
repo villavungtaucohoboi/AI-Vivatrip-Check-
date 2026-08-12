@@ -1,4 +1,11 @@
-import type { DatePricingContext, Holiday, PriceTier, Product, SearchFilters } from "./types";
+import type {
+  DatePricingContext,
+  DiscountType,
+  Holiday,
+  PriceTier,
+  Product,
+  SearchFilters,
+} from "./types";
 
 export const TIER_LABEL: Record<PriceTier, string> = {
   weekday: "Thứ 2 - Thứ 5",
@@ -48,13 +55,45 @@ export function getApplicablePrice(
   return { tier, price: price ?? null };
 }
 
-/** Tính chiết khấu — không ghi đè giá gốc, chỉ trả về số tiền tính toán. */
-export function calculateDiscountedPrice(
+/** Tính chiết khấu (theo % hoặc số tiền cố định) — không ghi đè giá gốc. */
+export function calculateDiscount(
   price: number,
-  discountPercent: number
+  type: DiscountType,
+  value: number
 ): { discountAmount: number; finalPrice: number } {
-  const discountAmount = Math.round((price * (discountPercent || 0)) / 100);
-  return { discountAmount, finalPrice: price - discountAmount };
+  const v = value || 0;
+  const discountAmount =
+    type === "amount" ? Math.min(Math.max(v, 0), price) : Math.round((price * v) / 100);
+  return { discountAmount, finalPrice: Math.max(0, price - discountAmount) };
+}
+
+/**
+ * Lấy đúng cấu hình chiết khấu (loại + giá trị) áp dụng cho 1 khung giá,
+ * tuỳ theo chế độ sản phẩm đang chọn:
+ * - "uniform": 1 mức chiết khấu chung cho cả 3 khung (Mục 1)
+ * - "by_day_type": ngày thường (weekday) dùng 1 mức riêng, "cuối tuần"
+ *   (Thứ 6, Thứ 7, Chủ nhật, Ngày lễ — tức 2 khung friday_sunday +
+ *   saturday_holiday) dùng chung 1 mức khác (Mục 2)
+ */
+export function getDiscountForTier(
+  product: Pick<
+    Product,
+    | "discount_scheme"
+    | "discount_type"
+    | "discount_value"
+    | "discount_weekday_type"
+    | "discount_weekday_value"
+    | "discount_weekend_type"
+    | "discount_weekend_value"
+  >,
+  tier: PriceTier
+): { type: DiscountType; value: number } {
+  if (product.discount_scheme === "by_day_type") {
+    return tier === "weekday"
+      ? { type: product.discount_weekday_type, value: product.discount_weekday_value }
+      : { type: product.discount_weekend_type, value: product.discount_weekend_value };
+  }
+  return { type: product.discount_type, value: product.discount_value };
 }
 
 export function toISODate(date: Date): string {
@@ -69,24 +108,46 @@ export function formatDateVN(iso: string): string {
   return `${d}/${m}/${y}`;
 }
 
+/** Hiển thị mức chiết khấu dạng chữ: "10%" hoặc "200.000đ" */
+export function formatDiscount(type: DiscountType, value: number): string {
+  if (type === "amount") {
+    return new Intl.NumberFormat("vi-VN").format(value) + "đ";
+  }
+  return `${value}%`;
+}
+
 function parseISODateLocal(iso: string): Date {
   const [y, m, d] = iso.split("-").map(Number);
   return new Date(y, m - 1, d);
 }
 
+type PricingProduct = Pick<
+  Product,
+  | "type"
+  | "price"
+  | "price_weekday"
+  | "price_friday_sunday"
+  | "price_saturday_holiday"
+  | "discount_scheme"
+  | "discount_type"
+  | "discount_value"
+  | "discount_weekday_type"
+  | "discount_weekday_value"
+  | "discount_weekend_type"
+  | "discount_weekend_value"
+>;
+
 /**
  * Điểm vào DUY NHẤT cho toàn app khi cần biết "sản phẩm này giá bao nhiêu".
  * - Hotel: luôn dùng product.price (giá phòng thấp nhất, không phụ thuộc ngày) —
  *   nằm ngoài phạm vi bảng giá theo thứ/ngày lễ.
- * - Villa/resort + có ngày cụ thể: xác định khung giá đúng ngày đó, áp chiết khấu.
+ * - Villa/resort + có ngày cụ thể: xác định khung giá đúng ngày đó, áp đúng
+ *   mức chiết khấu tương ứng (theo chế độ uniform hoặc by_day_type).
  * - Villa/resort + KHÔNG có ngày: không suy đoán — trả về rankingPrice = null,
  *   để ranking không giả định khách đi weekday, và UI phải hiện đủ 3 khung giá.
  */
 export function resolveProductPricing(
-  product: Pick<
-    Product,
-    "type" | "price" | "price_weekday" | "price_friday_sunday" | "price_saturday_holiday" | "discount_percent"
-  >,
+  product: PricingProduct,
   filters: Pick<SearchFilters, "date">,
   holidays: Holiday[]
 ): { rankingPrice: number | null; context?: DatePricingContext } {
@@ -99,6 +160,7 @@ export function resolveProductPricing(
   }
 
   const { tier, price: basePrice } = getApplicablePrice(product, parseISODateLocal(filters.date), holidays);
+  const discount = getDiscountForTier(product, tier);
 
   if (basePrice == null) {
     return {
@@ -107,14 +169,15 @@ export function resolveProductPricing(
         date: filters.date,
         tier,
         basePrice: null,
-        discountPercent: product.discount_percent,
+        discountType: discount.type,
+        discountValue: discount.value,
         discountAmount: 0,
         finalPrice: null,
       },
     };
   }
 
-  const { discountAmount, finalPrice } = calculateDiscountedPrice(basePrice, product.discount_percent);
+  const { discountAmount, finalPrice } = calculateDiscount(basePrice, discount.type, discount.value);
 
   return {
     rankingPrice: finalPrice,
@@ -122,7 +185,8 @@ export function resolveProductPricing(
       date: filters.date,
       tier,
       basePrice,
-      discountPercent: product.discount_percent,
+      discountType: discount.type,
+      discountValue: discount.value,
       discountAmount,
       finalPrice,
     },

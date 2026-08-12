@@ -11,8 +11,8 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Trang nhập mật khẩu Admin: luôn cho vào (tránh redirect loop).
-  if (pathname.startsWith("/admin/login")) {
+  // Trang / API đăng nhập Admin: luôn cho vào (tránh redirect loop / tự khoá chính nó).
+  if (pathname.startsWith("/admin/login") || pathname === "/api/admin/login") {
     return NextResponse.next();
   }
 

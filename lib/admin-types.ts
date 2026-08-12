@@ -15,11 +15,20 @@ export interface ProductInput {
   price_weekday?: number | null;
   price_friday_sunday?: number | null;
   price_saturday_holiday?: number | null;
-  discount_percent: number;
+  discount_scheme: "uniform" | "by_day_type";
+  discount_type: "percent" | "amount";
+  discount_value: number;
+  discount_weekday_type: "percent" | "amount";
+  discount_weekday_value: number;
+  discount_weekend_type: "percent" | "amount";
+  discount_weekend_value: number;
   pool: boolean;
   near_beach: boolean;
+  sea_view: boolean;
   karaoke: boolean;
   bbq: boolean;
+  pickleball: boolean;
+  near_lake: boolean;
   note?: string | null;
   google_maps_url?: string | null;
 }

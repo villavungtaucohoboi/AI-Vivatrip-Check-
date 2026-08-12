@@ -11,7 +11,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "VivaTrip Product Finder",
+  title: "VivaTrip",
   description: "Công cụ nội bộ tìm villa / khách sạn / resort cho đội sale VivaTrip",
 };
 

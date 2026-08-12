@@ -38,11 +38,17 @@ const TYPE_KEYWORDS: { keywords: string[]; type: ProductType }[] = [
   { keywords: ["khach san", "hotel"], type: "hotel" },
 ];
 
-const AMENITY_KEYWORDS: Record<"pool" | "near_beach" | "karaoke" | "bbq", string[]> = {
+const AMENITY_KEYWORDS: Record<
+  "pool" | "near_beach" | "sea_view" | "karaoke" | "bbq" | "pickleball" | "near_lake",
+  string[]
+> = {
   pool: ["ho boi", "be boi"],
-  near_beach: ["gan bien", "sat bien", "view bien", "bai bien"],
+  near_beach: ["sat bien", "bai bien", "di bo ra bien"],
+  sea_view: ["view bien", "gan bien"],
   karaoke: ["karaoke"],
   bbq: ["bbq", "tiec nuong", "nuong"],
+  pickleball: ["pickleball", "pickle ball"],
+  near_lake: ["view ho", "gan ho", "sat ho", "canh ho"],
 };
 
 function parseMoney(numStr: string, unit: string): number {
@@ -187,8 +193,11 @@ export function parseQuery(
   // --- Tiện ích
   if (AMENITY_KEYWORDS.pool.some((k) => norm.includes(k))) filters.pool = true;
   if (AMENITY_KEYWORDS.near_beach.some((k) => norm.includes(k))) filters.near_beach = true;
+  if (AMENITY_KEYWORDS.sea_view.some((k) => norm.includes(k))) filters.sea_view = true;
   if (AMENITY_KEYWORDS.karaoke.some((k) => norm.includes(k))) filters.karaoke = true;
   if (AMENITY_KEYWORDS.bbq.some((k) => norm.includes(k))) filters.bbq = true;
+  if (AMENITY_KEYWORDS.pickleball.some((k) => norm.includes(k))) filters.pickleball = true;
+  if (AMENITY_KEYWORDS.near_lake.some((k) => norm.includes(k))) filters.near_lake = true;
 
   return filters;
 }

@@ -17,6 +17,8 @@ export interface Profile {
 }
 
 export type PriceTier = "weekday" | "friday_sunday" | "saturday_holiday";
+export type DiscountType = "percent" | "amount";
+export type DiscountScheme = "uniform" | "by_day_type";
 
 export interface Product {
   id: string;
@@ -35,11 +37,21 @@ export interface Product {
   price_weekday: number | null;
   price_friday_sunday: number | null;
   price_saturday_holiday: number | null;
-  discount_percent: number;
+  /** uniform: dùng discount_type/discount_value cho cả 3 khung. by_day_type: dùng discount_weekday_*/discount_weekend_* */
+  discount_scheme: DiscountScheme;
+  discount_type: DiscountType;
+  discount_value: number;
+  discount_weekday_type: DiscountType;
+  discount_weekday_value: number;
+  discount_weekend_type: DiscountType;
+  discount_weekend_value: number;
   pool: boolean;
   near_beach: boolean;
+  sea_view: boolean;
   karaoke: boolean;
   bbq: boolean;
+  pickleball: boolean;
+  near_lake: boolean;
   note: string | null;
   google_maps_url: string | null;
   thumbnail_url: string | null;
@@ -90,8 +102,11 @@ export interface SearchFilters {
   date?: string; // YYYY-MM-DD — "Ngày đi", ảnh hưởng giá villa/resort
   pool?: boolean;
   near_beach?: boolean;
+  sea_view?: boolean;
   karaoke?: boolean;
   bbq?: boolean;
+  pickleball?: boolean;
+  near_lake?: boolean;
 }
 
 export interface SearchRequestBody {
@@ -105,7 +120,8 @@ export interface DatePricingContext {
   date: string; // YYYY-MM-DD
   tier: PriceTier;
   basePrice: number | null;
-  discountPercent: number;
+  discountType: DiscountType;
+  discountValue: number;
   discountAmount: number;
   finalPrice: number | null;
 }
@@ -136,11 +152,20 @@ export interface ImportRow {
   price_weekday?: number;
   price_friday_sunday?: number;
   price_saturday_holiday?: number;
-  discount_percent?: number;
+  discount_scheme?: string;
+  discount_type?: string;
+  discount_value?: number;
+  discount_weekday_type?: string;
+  discount_weekday_value?: number;
+  discount_weekend_type?: string;
+  discount_weekend_value?: number;
   pool?: boolean;
   near_beach?: boolean;
+  sea_view?: boolean;
   karaoke?: boolean;
   bbq?: boolean;
+  pickleball?: boolean;
+  near_lake?: boolean;
   note?: string;
 }
 

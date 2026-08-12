@@ -1,15 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Lock, Plus, Search, Settings } from "lucide-react";
-import { logoutAdmin } from "@/app/admin/login/actions";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/lib/types";
 
 export function Header({ role }: { role: UserRole }) {
   const pathname = usePathname();
+  const router = useRouter();
   const inAdminArea = pathname.startsWith("/admin");
+
+  async function handleLogout() {
+    await fetch("/api/admin/logout", { method: "POST" });
+    router.replace("/search");
+    router.refresh();
+  }
 
   const navItem = (href: string, label: string, Icon: typeof Search) => (
     <Link
@@ -34,7 +40,7 @@ export function Header({ role }: { role: UserRole }) {
             V
           </div>
           <span className="hidden text-[17px] font-bold text-ink sm:block">
-            VivaTrip Product Finder
+            VivaTrip
           </span>
         </Link>
 
@@ -52,16 +58,14 @@ export function Header({ role }: { role: UserRole }) {
         </nav>
 
         {role === "admin" && inAdminArea && (
-          <form action={logoutAdmin}>
-            <button
-              type="submit"
-              className="flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-sm font-medium text-ink-muted hover:bg-paper-dim hover:text-ink"
-              aria-label="Khóa lại khu vực Admin"
-              title="Khóa lại khu vực Admin"
-            >
-              <Lock className="h-4 w-4" />
-            </button>
-          </form>
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-sm font-medium text-ink-muted hover:bg-paper-dim hover:text-ink"
+            aria-label="Khóa lại khu vực Admin"
+            title="Khóa lại khu vực Admin"
+          >
+            <Lock className="h-4 w-4" />
+          </button>
         )}
       </div>
     </header>

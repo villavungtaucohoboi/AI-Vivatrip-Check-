@@ -3,6 +3,9 @@ import { notFound } from "next/navigation";
 import {
   ArrowLeft,
   BedDouble,
+  Droplet,
+  Dumbbell,
+  Eye,
   ExternalLink,
   Flame,
   MapPin,
@@ -15,6 +18,8 @@ import { isAdminSession } from "@/lib/admin-auth";
 import { Header } from "@/components/header";
 import { BottomNav } from "@/components/bottom-nav";
 import { ProductGallery } from "@/components/product-gallery";
+import { CopyButton } from "@/components/copy-button";
+import { DownloadImagesButton } from "@/components/download-images-button";
 import { HotelRateTable } from "@/components/hotel-rate-table";
 import { VillaPricingTable } from "@/components/villa-pricing-table";
 import { Badge } from "@/components/ui/badge";
@@ -26,9 +31,12 @@ import { PRODUCT_TYPE_LABEL, type Holiday, type HotelRate, type Product, type Pr
 
 const AMENITIES = [
   { key: "pool" as const, label: "Hồ bơi riêng", Icon: Waves },
-  { key: "near_beach" as const, label: "Gần biển", Icon: MapPin },
+  { key: "near_beach" as const, label: "Sát biển", Icon: MapPin },
+  { key: "sea_view" as const, label: "View biển", Icon: Eye },
+  { key: "near_lake" as const, label: "View hồ", Icon: Droplet },
   { key: "karaoke" as const, label: "Phòng karaoke", Icon: Music2 },
   { key: "bbq" as const, label: "Khu BBQ", Icon: Flame },
+  { key: "pickleball" as const, label: "Sân pickleball", Icon: Dumbbell },
 ];
 
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
@@ -173,7 +181,10 @@ export default async function ProductDetailPage({
 
         {product.note && (
           <Card className="mt-4 p-4 sm:p-5">
-            <h2 className="mb-2 font-display text-base text-ink">Ghi chú</h2>
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className="font-display text-base text-ink">Ghi chú</h2>
+              <CopyButton text={product.note} />
+            </div>
             <p className="whitespace-pre-line text-sm text-ink-muted">{product.note}</p>
           </Card>
         )}
@@ -190,14 +201,19 @@ export default async function ProductDetailPage({
           </Card>
         )}
 
-        {product.google_maps_url && (
-          <a href={product.google_maps_url} target="_blank" rel="noopener noreferrer">
-            <Button variant="outline" className="mt-5 w-full sm:w-auto">
-              <ExternalLink className="h-4 w-4" />
-              Xem trên Google Maps
-            </Button>
-          </a>
-        )}
+        <div className="mt-5 flex flex-wrap gap-3">
+          {gallery.length > 0 && (
+            <DownloadImagesButton images={gallery} productName={product.product_name} />
+          )}
+          {product.google_maps_url && (
+            <a href={product.google_maps_url} target="_blank" rel="noopener noreferrer">
+              <Button variant="outline" className="w-full sm:w-auto">
+                <ExternalLink className="h-4 w-4" />
+                Xem trên Google Maps
+              </Button>
+            </a>
+          )}
+        </div>
       </main>
 
       <BottomNav role={role} />

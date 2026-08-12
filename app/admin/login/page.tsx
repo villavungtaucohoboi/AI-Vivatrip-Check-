@@ -3,7 +3,6 @@
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2, Lock } from "lucide-react";
-import { loginAdmin } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,10 +19,15 @@ function AdminLoginForm() {
     setLoading(true);
     setError(null);
 
-    const result = await loginAdmin(password);
+    const res = await fetch("/api/admin/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password }),
+    });
+    const result = await res.json();
 
-    if ("error" in result) {
-      setError(result.error);
+    if (!res.ok || "error" in result) {
+      setError(result.error ?? "Có lỗi xảy ra, vui lòng thử lại.");
       setLoading(false);
       return;
     }

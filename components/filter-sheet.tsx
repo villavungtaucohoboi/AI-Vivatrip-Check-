@@ -9,11 +9,17 @@ import { Select } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PRODUCT_TYPE_LABEL, type SearchFilters } from "@/lib/types";
 
-const AMENITIES: { key: "pool" | "near_beach" | "karaoke" | "bbq"; label: string }[] = [
+const AMENITIES: {
+  key: "pool" | "near_beach" | "sea_view" | "karaoke" | "bbq" | "pickleball" | "near_lake";
+  label: string;
+}[] = [
   { key: "pool", label: "Hồ bơi" },
-  { key: "near_beach", label: "Gần biển" },
+  { key: "near_beach", label: "Sát biển" },
+  { key: "sea_view", label: "View biển" },
+  { key: "near_lake", label: "View hồ" },
   { key: "karaoke", label: "Karaoke" },
   { key: "bbq", label: "BBQ" },
+  { key: "pickleball", label: "Sân pickleball" },
 ];
 
 export function FilterSheet({

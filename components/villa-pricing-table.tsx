@@ -1,15 +1,29 @@
 import { formatVND } from "@/lib/format";
-import { formatDateVN, TIER_LABEL } from "@/lib/pricing";
+import { formatDateVN, formatDiscount, getDiscountForTier, TIER_LABEL } from "@/lib/pricing";
 import type { DatePricingContext, PriceTier, Product } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const TIERS: PriceTier[] = ["weekday", "friday_sunday", "saturday_holiday"];
 
+type PricingProduct = Pick<
+  Product,
+  | "price_weekday"
+  | "price_friday_sunday"
+  | "price_saturday_holiday"
+  | "discount_scheme"
+  | "discount_type"
+  | "discount_value"
+  | "discount_weekday_type"
+  | "discount_weekday_value"
+  | "discount_weekend_type"
+  | "discount_weekend_value"
+>;
+
 export function VillaPricingTable({
   product,
   context,
 }: {
-  product: Pick<Product, "price_weekday" | "price_friday_sunday" | "price_saturday_holiday" | "discount_percent">;
+  product: PricingProduct;
   context?: DatePricingContext;
 }) {
   const priceByTier: Record<PriceTier, number | null> = {
@@ -17,6 +31,13 @@ export function VillaPricingTable({
     friday_sunday: product.price_friday_sunday,
     saturday_holiday: product.price_saturday_holiday,
   };
+
+  const weekdayDiscount = getDiscountForTier(product, "weekday");
+  const weekendDiscount = getDiscountForTier(product, "saturday_holiday");
+  const hasAnyDiscount =
+    product.discount_scheme === "uniform"
+      ? product.discount_value > 0
+      : product.discount_weekday_value > 0 || product.discount_weekend_value > 0;
 
   return (
     <div className="space-y-3">
@@ -26,9 +47,9 @@ export function VillaPricingTable({
             Giá áp dụng ngày {formatDateVN(context.date)}:{" "}
             <span className="font-bold">{formatVND(context.basePrice)}</span>
           </p>
-          {context.discountPercent > 0 && (
+          {context.discountValue > 0 && (
             <p className="mt-1 text-sm text-teal-dark">
-              Sau chiết khấu {context.discountPercent}%:{" "}
+              Sau chiết khấu {formatDiscount(context.discountType, context.discountValue)}:{" "}
               <span className="font-bold">{formatVND(context.finalPrice)}</span>
             </p>
           )}
@@ -58,10 +79,32 @@ export function VillaPricingTable({
         })}
       </div>
 
-      {product.discount_percent > 0 && (
-        <p className="text-sm text-ink-muted">
-          Chiết khấu: <span className="font-semibold text-ink">{product.discount_percent}%</span>
-        </p>
+      {hasAnyDiscount && (
+        <div className="text-sm text-ink-muted">
+          {product.discount_scheme === "uniform" ? (
+            <p>
+              Chiết khấu (mọi ngày):{" "}
+              <span className="font-semibold text-ink">
+                {formatDiscount(product.discount_type, product.discount_value)}
+              </span>
+            </p>
+          ) : (
+            <div className="space-y-0.5">
+              <p>
+                Chiết khấu ngày thường:{" "}
+                <span className="font-semibold text-ink">
+                  {formatDiscount(weekdayDiscount.type, weekdayDiscount.value)}
+                </span>
+              </p>
+              <p>
+                Chiết khấu cuối tuần & lễ:{" "}
+                <span className="font-semibold text-ink">
+                  {formatDiscount(weekendDiscount.type, weekendDiscount.value)}
+                </span>
+              </p>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

@@ -52,12 +52,13 @@ export function SearchBar({
         type="button"
         onClick={onOpenFilters}
         className={cn(
-          "inline-flex items-center gap-2 rounded-xl border border-border bg-white px-4 py-2.5 text-sm font-medium text-ink lg:hidden",
+          "inline-flex items-center gap-2 rounded-xl border border-border bg-white px-4 py-2.5 text-sm font-medium text-ink",
           "hover:bg-paper-dim"
         )}
       >
         <SlidersHorizontal className="h-4 w-4" />
-        Bộ lọc
+        <span className="lg:hidden">Bộ lọc</span>
+        <span className="hidden lg:inline">Tiện ích &amp; bộ lọc khác</span>
         {activeFilterCount > 0 && (
           <span className="flex h-5 w-5 items-center justify-center rounded-full bg-teal text-[11px] text-white">
             {activeFilterCount}

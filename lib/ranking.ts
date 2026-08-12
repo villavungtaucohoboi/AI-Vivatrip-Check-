@@ -10,7 +10,7 @@ const W_TYPE = 10_000;
 const W_CAPACITY = 1_000;
 const W_PRICE = 900;
 const W_BEDROOMS = 90;
-const W_AMENITY_EACH = 2.25; // tối đa 4 tiện ích -> tối đa 9 điểm
+const W_AMENITY_EACH = 2.25; // tối đa 6 tiện ích -> tối đa 13.5 điểm (vẫn nhỏ hơn nhiều so với W_BEDROOMS)
 
 function normalize(str: string): string {
   return str
@@ -83,7 +83,7 @@ export function scoreProduct(
   }
 
   // 6. Tiện ích chính nếu khách có yêu cầu
-  (["pool", "near_beach", "karaoke", "bbq"] as const).forEach((key) => {
+  (["pool", "near_beach", "sea_view", "karaoke", "bbq", "pickleball", "near_lake"] as const).forEach((key) => {
     if (filters[key] && product[key]) score += W_AMENITY_EACH;
   });
 
@@ -129,8 +129,11 @@ export function applyExplicitFilters<T>(query: T, filters: SearchFilters): T {
   if (filters.priceTo != null) q = q.lte("price", filters.priceTo);
   if (filters.pool) q = q.eq("pool", true);
   if (filters.near_beach) q = q.eq("near_beach", true);
+  if (filters.sea_view) q = q.eq("sea_view", true);
   if (filters.karaoke) q = q.eq("karaoke", true);
   if (filters.bbq) q = q.eq("bbq", true);
+  if (filters.pickleball) q = q.eq("pickleball", true);
+  if (filters.near_lake) q = q.eq("near_lake", true);
 
   return q as T;
 }
