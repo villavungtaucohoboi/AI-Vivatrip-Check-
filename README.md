@@ -148,6 +148,29 @@ làm hỏng tính năng tìm kiếm cốt lõi. AI (nếu dùng) chỉ nên làm
 câu chữ thành filter, **không** được tự tạo tên sản phẩm/giá — mọi kết quả
 hiển thị luôn lấy trực tiếp từ database.
 
+## Module "Quỹ ngày lễ" (`/holiday-funds`)
+
+Bảng chia sẻ quỹ villa/khách sạn dịp cao điểm cho cả team — tách biệt hoàn toàn với
+module Check Căn, không đụng gì tới bảng `products`. Cần chạy thêm migration
+[`supabase/migrations/0007_holiday_funds.sql`](./supabase/migrations/0007_holiday_funds.sql)
+(tạo 4 bảng `holiday_fund_sheets/posts/items/images` + storage bucket riêng
+`holiday-fund-images`).
+
+**Cách hoạt động:** Admin tạo "Sheet" theo khu vực (VD: Hạ Long, Phan Thiết) —
+Sale vào đúng Sheet, dán nguyên văn tin nhắn quỹ từ Zalo/Messenger, hệ thống tự tách
+tên villa / ngày / giá bằng `lib/holiday-fund-parser.ts` (`parseHolidayFundText`).
+Nội dung gốc (`raw_content`) không bao giờ bị ghi đè — dữ liệu tách chỉ dùng để tổng
+hợp/tìm kiếm, dòng nào không nhận diện được vẫn giữ nguyên, không tự bịa.
+
+**Quyền truy cập:** `/holiday-funds` mở tự do như `/search`, không cần mật khẩu.
+Quản lý Sheet (tạo/đổi tên/xóa) yêu cầu mật khẩu Admin như khu `/admin`. Vì app không
+dùng hệ thống tài khoản, việc "sửa/xóa bài của mình" nhận diện bằng 1 mã ngẫu nhiên lưu
+trên trình duyệt người đăng (`lib/holiday-fund-identity.ts`) — không phải bảo mật
+mạnh, phù hợp mức độ tin cậy của một công cụ nội bộ dùng chung.
+
+Dữ liệu tải lại (refetch) sau mỗi lần đăng/sửa/xóa thay vì dùng Supabase Realtime, để
+ưu tiên độ ổn định đơn giản như đề bài cho phép.
+
 ## Phạm vi không làm (theo yêu cầu)
 
 Không CRM, không booking, không kiểm tra tình trạng phòng trống, không thanh
