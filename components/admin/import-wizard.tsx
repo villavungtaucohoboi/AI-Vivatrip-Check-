@@ -208,7 +208,8 @@ export function ImportWizard() {
       </div>
       <h2 className="font-display text-lg text-ink">Upload file Excel</h2>
       <p className="mx-auto mt-1 max-w-sm text-sm text-ink-muted">
-        File .xlsx với các cột: product_code, product_name, type, area, address, bedrooms, beds,
+        File .xlsx với các cột: product_code, product_name, type, area, sub_region (tiểu khu vực, tuỳ chọn),
+        address, bedrooms, beds,
         standard_guests, max_guests, price (chỉ hotel), price_weekday, price_friday_sunday,
         price_saturday_holiday (chỉ villa/resort), discount_scheme (uniform/by_day_type),
         discount_type, discount_value, discount_weekday_type, discount_weekday_value,

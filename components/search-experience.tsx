@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Loader2, Plus, X } from "lucide-react";
+import { Loader2, Plus, Sparkles, X } from "lucide-react";
 import { SearchBar } from "@/components/search-bar";
 import { FilterSheet } from "@/components/filter-sheet";
 import { FilterBar } from "@/components/filter-bar";
 import { ProductGrid } from "@/components/product-grid";
+import { ProductCard } from "@/components/product-card";
 import { EmptyState } from "@/components/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -29,6 +30,7 @@ interface SavedState {
   total: number;
   hasSearched: boolean;
   lastQuery: string;
+  suggestedRegions: string[];
   scrollY: number;
 }
 
@@ -53,8 +55,6 @@ export function SearchExperience({
 }) {
   const isAdmin = useClientRole(initialIsAdmin ? "admin" : "sale") === "admin";
 
-  // Khôi phục lại đúng lần tìm kiếm gần nhất (nếu có) ngay từ lần render đầu
-  // tiên — để bấm vào 1 sản phẩm rồi quay lại không bị mất kết quả đang xem.
   const saved = useRef(loadSavedState()).current;
 
   const [query, setQuery] = useState(saved?.query ?? "");
@@ -67,6 +67,7 @@ export function SearchExperience({
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasSearched, setHasSearched] = useState(saved?.hasSearched ?? false);
   const [lastQuery, setLastQuery] = useState(saved?.lastQuery ?? "");
+  const [suggestedRegions, setSuggestedRegions] = useState<string[]>(saved?.suggestedRegions ?? []);
   const [error, setError] = useState<string | null>(null);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
 
@@ -74,7 +75,6 @@ export function SearchExperience({
     setRecentSearches(getRecentSearches());
   }, []);
 
-  // Khôi phục vị trí cuộn sau khi nội dung đã render lại đầy đủ
   useEffect(() => {
     if (saved?.scrollY) {
       requestAnimationFrame(() => window.scrollTo(0, saved.scrollY));
@@ -91,17 +91,17 @@ export function SearchExperience({
       total,
       hasSearched,
       lastQuery,
+      suggestedRegions,
       scrollY: window.scrollY,
       ...next,
     };
     try {
       sessionStorage.setItem(STORAGE_KEY, JSON.stringify(current));
     } catch {
-      // sessionStorage đầy hoặc bị chặn -> bỏ qua, không ảnh hưởng chức năng tìm kiếm
+      // sessionStorage đầy hoặc bị chặn -> bỏ qua
     }
   }
 
-  // Lưu lại vị trí cuộn ngay trước khi rời trang (bấm vào 1 sản phẩm)
   useEffect(() => {
     function onVisibilityOrUnload() {
       persist({ scrollY: window.scrollY });
@@ -132,10 +132,12 @@ export function SearchExperience({
         const data: SearchResponseBody = await res.json();
 
         const nextResults = opts.append ? [...results, ...data.results] : data.results;
+        const nextSuggested = opts.append ? suggestedRegions : data.suggestedRegions ?? [];
         setResults(nextResults);
         setTotal(data.total);
         setLastQuery(opts.query);
         setHasSearched(true);
+        setSuggestedRegions(nextSuggested);
         persist({
           query: opts.query,
           filters: opts.filters,
@@ -143,6 +145,7 @@ export function SearchExperience({
           total: data.total,
           lastQuery: opts.query,
           hasSearched: true,
+          suggestedRegions: nextSuggested,
           scrollY: 0,
         });
       } catch {
@@ -153,7 +156,7 @@ export function SearchExperience({
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [results]
+    [results, suggestedRegions]
   );
 
   function handleSubmitQuery() {
@@ -175,7 +178,14 @@ export function SearchExperience({
     runSearch({ query, filters, offset: results.length, append: true });
   }
 
+  function handleExpandRegion(region: string) {
+    const nextFilters = { ...filters, expandRegions: [...(filters.expandRegions ?? []), region] };
+    setFilters(nextFilters);
+    runSearch({ query, filters: nextFilters, offset: 0, append: false });
+  }
+
   const activeFilterCount = Object.values(filters).filter((v) => v !== undefined && v !== "").length;
+  const hasRealCriteria = !!lastQuery.trim() || Object.keys(filters).length > 0;
 
   if (!hasAnyProducts) {
     return (
@@ -198,6 +208,11 @@ export function SearchExperience({
       </EmptyState>
     );
   }
+
+  const showTop3 = hasRealCriteria && results.length > 0;
+  const top3 = showTop3 ? results.slice(0, 3) : [];
+  const rest = showTop3 ? results.slice(3) : results;
+  const regionLabel = filters.area ?? "";
 
   return (
     <div className="space-y-5">
@@ -275,10 +290,28 @@ export function SearchExperience({
       {!loading && error && <EmptyState title="Không tìm được" description={error} />}
 
       {!loading && !error && hasSearched && results.length === 0 && (
-        <EmptyState
-          title="Không có sản phẩm phù hợp"
-          description="Thử đổi từ khóa hoặc nới rộng bộ lọc để xem thêm lựa chọn."
-        />
+        <div className="space-y-4">
+          <EmptyState
+            title={regionLabel ? `Chưa tìm thấy căn phù hợp tại ${regionLabel}.` : "Không có sản phẩm phù hợp"}
+            description="Thử đổi từ khóa hoặc nới rộng bộ lọc để xem thêm lựa chọn."
+          />
+          {suggestedRegions.length > 0 && (
+            <div className="rounded-2xl border border-dashed border-border p-4 text-center">
+              <p className="mb-3 text-[13px] text-ink-muted">Bạn có muốn mở rộng sang khu vực khác?</p>
+              <div className="flex flex-wrap justify-center gap-2">
+                {suggestedRegions.map((r) => (
+                  <button
+                    key={r}
+                    onClick={() => handleExpandRegion(r)}
+                    className="rounded-full border border-teal/40 bg-teal-light px-3.5 py-1.5 text-[12.5px] font-medium text-teal-dark hover:bg-teal-light/70"
+                  >
+                    Xem thêm {r}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
       {!loading && !error && !hasSearched && results.length === 0 && (
@@ -290,10 +323,39 @@ export function SearchExperience({
 
       {!loading && results.length > 0 && (
         <>
-          <p className="text-[13px] text-ink-muted">
-            Đang hiển thị {results.length} / {total} sản phẩm phù hợp nhất
-          </p>
-          <ProductGrid products={results} showBestMatch={!!lastQuery.trim()} />
+          {showTop3 && top3.length > 0 && (
+            <div>
+              <p className="mb-2.5 flex items-center gap-1.5 text-[13.5px] font-bold text-ink">
+                <Sparkles className="h-4 w-4 text-sand" />
+                {top3.length === 3 ? "3 căn phù hợp nhất" : `${top3.length} căn phù hợp nhất`}
+              </p>
+              <div className="grid grid-cols-2 gap-2.5 sm:gap-3.5 lg:grid-cols-3">
+                {top3.map((product, i) => (
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    rank={(i + 1) as 1 | 2 | 3}
+                    matchLabel={i === 0 ? "Phù hợp nhất" : `Lựa chọn ${i + 1}`}
+                    reason={product._reason}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {rest.length > 0 && (
+            <div>
+              {showTop3 && (
+                <p className="mb-2.5 text-[13.5px] font-bold text-ink">
+                  {regionLabel ? `Các căn khác tại ${regionLabel}` : "Các sản phẩm khác"}
+                </p>
+              )}
+              <p className="mb-2.5 text-[13px] text-ink-muted">
+                Đang hiển thị {results.length} / {total} sản phẩm phù hợp nhất
+              </p>
+              <ProductGrid products={rest} />
+            </div>
+          )}
 
           {results.length < total && (
             <div className="flex justify-center pt-2">
@@ -301,6 +363,25 @@ export function SearchExperience({
                 {loadingMore && <Loader2 className="h-4 w-4 animate-spin" />}
                 Xem thêm sản phẩm
               </Button>
+            </div>
+          )}
+
+          {suggestedRegions.length > 0 && (
+            <div className="rounded-2xl border border-dashed border-border p-4 text-center">
+              <p className="mb-3 text-[13px] text-ink-muted">
+                Muốn xem thêm khu vực tương tự {regionLabel}?
+              </p>
+              <div className="flex flex-wrap justify-center gap-2">
+                {suggestedRegions.map((r) => (
+                  <button
+                    key={r}
+                    onClick={() => handleExpandRegion(r)}
+                    className="rounded-full border border-teal/40 bg-teal-light px-3.5 py-1.5 text-[12.5px] font-medium text-teal-dark hover:bg-teal-light/70"
+                  >
+                    Xem thêm {r}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </>

@@ -72,15 +72,21 @@ function PriceBlock({ product }: { product: Product & { _pricing?: DatePricingCo
 export function ProductCard({
   product,
   matchLabel,
+  rank,
+  reason,
 }: {
-  product: Product & { _pricing?: DatePricingContext };
+  product: Product & { _pricing?: DatePricingContext; _reason?: string };
   /** VD: "Phù hợp nhất" — chỉ nên truyền cho kết quả #1 của một tìm kiếm có nội dung */
   matchLabel?: string;
+  /** 1, 2, 3 — hiện huy chương 🥇🥈🥉 cho Top 3 "phù hợp nhất" */
+  rank?: 1 | 2 | 3;
+  reason?: string;
 }) {
   const amenities = AMENITY_ICONS.filter(({ key }) => product[key]).slice(0, 2);
   const detailHref = product._pricing?.date
     ? `/products/${product.id}?date=${product._pricing.date}`
     : `/products/${product.id}`;
+  const rankMedal = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : null;
 
   return (
     <Link href={detailHref} className="block h-full">
@@ -98,6 +104,7 @@ export function ProductCard({
             </Badge>
             {matchLabel && (
               <Badge className="bg-teal text-white shadow-sm px-2 py-0.5 text-[10px] lg:px-2.5 lg:py-1 lg:text-xs" variant="default">
+                {rankMedal ? `${rankMedal} ` : ""}
                 {matchLabel}
               </Badge>
             )}
@@ -111,7 +118,9 @@ export function ProductCard({
             </h3>
             <p className="mt-0.5 flex items-center gap-1 text-[11px] lg:text-[13px] text-ink-muted">
               <MapPin className="h-3 w-3 lg:h-3.5 lg:w-3.5 shrink-0" />
-              <span className="truncate">{product.area}</span>
+              <span className="truncate">
+                {product.sub_region ? `${product.sub_region}, ${product.area}` : product.area}
+              </span>
             </p>
           </div>
 
@@ -135,6 +144,10 @@ export function ProductCard({
               </span>
             ))}
           </div>
+
+          {reason && (
+            <p className="text-[10.5px] lg:text-[12px] text-teal-dark line-clamp-1">{reason}</p>
+          )}
 
           <div className="mt-auto flex items-end justify-between pt-1 lg:pt-1.5">
             <PriceBlock product={product} />

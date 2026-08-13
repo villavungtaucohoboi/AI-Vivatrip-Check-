@@ -14,6 +14,7 @@ export async function POST(req: NextRequest) {
   const payload: ProductInput = {
     ...(input.type === "hotel" ? input : { ...input, price: input.price_weekday ?? null }),
     area: normalizeAreaName(input.area),
+    sub_region: input.sub_region?.trim() ? normalizeAreaName(input.sub_region) : null,
   };
 
   if (id) {

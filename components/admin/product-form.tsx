@@ -92,6 +92,7 @@ export function ProductForm({
     product_name: product?.product_name ?? "",
     type: product?.type ?? "villa",
     area: product?.area ?? "",
+    sub_region: product?.sub_region ?? "",
     address: product?.address ?? "",
     bedrooms: product?.bedrooms ?? null,
     beds: product?.beds ?? null,
@@ -271,8 +272,17 @@ export function ProductForm({
               id="area"
               value={form.area}
               onChange={(e) => set("area", e.target.value)}
-              placeholder="VD: Phan Thiết"
+              placeholder="VD: Sóc Sơn"
               required
+            />
+          </div>
+          <div>
+            <Label htmlFor="sub_region">Tiểu khu vực</Label>
+            <Input
+              id="sub_region"
+              value={form.sub_region ?? ""}
+              onChange={(e) => set("sub_region", e.target.value)}
+              placeholder="VD: Đồng Đò (để trống nếu không có)"
             />
           </div>
           <div>

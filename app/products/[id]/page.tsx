@@ -121,7 +121,7 @@ export default async function ProductDetailPage({
             <h1 className="font-display text-2xl text-ink">{product.product_name}</h1>
             <p className="mt-1 flex items-center gap-1.5 text-sm text-ink-muted">
               <MapPin className="h-4 w-4" />
-              {product.address || product.area}
+              {product.address || (product.sub_region ? `${product.sub_region}, ${product.area}` : product.area)}
             </p>
           </div>
           <div className="text-right">

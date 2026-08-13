@@ -18,6 +18,7 @@ export async function POST(req: NextRequest) {
     product_name: r.product_name,
     type: r.type,
     area: normalizeAreaName(r.area),
+    sub_region: r.sub_region?.trim() ? normalizeAreaName(r.sub_region) : null,
     address: r.address ?? null,
     bedrooms: r.bedrooms ?? null,
     beds: r.beds ?? null,

@@ -13,6 +13,7 @@ import { EmptyState } from "@/components/empty-state";
 import { DeleteDialog } from "@/components/admin/delete-dialog";
 import { formatVND } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { normalizeAreaName } from "@/lib/normalize-area";
 import { PRODUCT_TYPE_LABEL, type Product } from "@/lib/types";
 
 const PAGE_SIZE = 20;
@@ -43,12 +44,15 @@ export function AdminProductTable({ initialProducts }: { initialProducts: Produc
   }, [products, search]);
 
   const grouped = useMemo(() => {
-    const map = new Map<string, Product[]>();
+    const map = new Map<string, { label: string; items: Product[] }>();
     filtered.forEach((p) => {
-      if (!map.has(p.area)) map.set(p.area, []);
-      map.get(p.area)!.push(p);
+      const key = normalizeAreaName(p.area);
+      if (!map.has(key)) map.set(key, { label: key, items: [] });
+      map.get(key)!.items.push(p);
     });
-    return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0], "vi"));
+    return [...map.values()]
+      .map(({ label, items }) => [label, items] as [string, Product[]])
+      .sort((a, b) => a[0].localeCompare(b[0], "vi"));
   }, [filtered]);
 
   const paged = filtered.slice(0, page * PAGE_SIZE);

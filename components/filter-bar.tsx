@@ -5,6 +5,7 @@ import { Search } from "lucide-react";
 import { Select } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { createClient } from "@/lib/supabase/client";
 import { PRODUCT_TYPE_LABEL, type SearchFilters } from "@/lib/types";
 
 export function FilterBar({
@@ -17,15 +18,32 @@ export function FilterBar({
   onApply: (filters: SearchFilters) => void;
 }) {
   const [draft, setDraft] = useState<SearchFilters>(value);
+  const [subRegions, setSubRegions] = useState<string[]>([]);
 
   useEffect(() => setDraft(value), [value]);
+
+  useEffect(() => {
+    if (!draft.area) {
+      setSubRegions([]);
+      return;
+    }
+    let cancelled = false;
+    createClient()
+      .rpc("get_sub_regions_for_area", { p_area: draft.area })
+      .then(({ data }) => {
+        if (!cancelled) setSubRegions(((data ?? []) as { sub_region: string }[]).map((r) => r.sub_region));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [draft.area]);
 
   function set<K extends keyof SearchFilters>(key: K, val: SearchFilters[K]) {
     setDraft((d) => ({ ...d, [key]: val }));
   }
 
   return (
-    <div className="hidden items-end gap-2.5 lg:flex">
+    <div className="hidden items-end gap-2.5 lg:flex lg:flex-wrap">
       <div className="w-36">
         <Select
           aria-label="Khu vực"
@@ -40,6 +58,23 @@ export function FilterBar({
           ))}
         </Select>
       </div>
+
+      {subRegions.length > 0 && (
+        <div className="w-36">
+          <Select
+            aria-label="Tiểu khu vực"
+            value={draft.subRegion ?? ""}
+            onChange={(e) => set("subRegion", e.target.value || undefined)}
+          >
+            <option value="">Tất cả {draft.area}</option>
+            {subRegions.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </Select>
+        </div>
+      )}
 
       <div className="w-40">
         <Select
