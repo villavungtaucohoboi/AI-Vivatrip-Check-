@@ -5,6 +5,7 @@ export interface ProductInput {
   product_name: string;
   type: ProductType;
   area: string;
+  sub_region?: string | null;
   address?: string | null;
   bedrooms?: number | null;
   beds?: number | null;

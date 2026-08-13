@@ -57,7 +57,7 @@ const STOPWORDS = new Set([
   "can", "tim", "co", "cho", "gia", "khoang", "tam", "toi", "da", "thieu", "duoi", "tren",
   "nguoi", "khach", "phong", "ngu", "dem", "tai", "o", "va", "voi", "mot", "cac", "san",
   "pham", "cua", "la", "nay", "do", "the", "day", "trong", "khong", "qua", "tu", "den",
-  "hoac", "hay", "muon", "xin", "chi", "chinh",
+  "hoac", "hay", "muon", "xin", "chi", "chinh", "cuoi", "tuan", "ngay", "di",
 ]);
 
 function parseMoney(numStr: string, unit: string): number {
@@ -143,6 +143,7 @@ function nextOccurrenceOf(targetDay: number, now: Date): Date {
 export function parseQuery(
   rawQuery: string,
   knownAreas: string[] = DEFAULT_AREAS,
+  knownSubRegions: string[] = [],
   now: Date = new Date()
 ): SearchFilters {
   const filters: SearchFilters = {};
@@ -152,6 +153,16 @@ export function parseQuery(
 
   const date = parseDate(norm, now);
   if (date) filters.date = date;
+
+  // --- Tiểu khu vực: so khớp trước (chuỗi dài hơn ưu tiên), vì tên tiểu khu
+  // vực thường cụ thể hơn tên khu vực lớn (VD "Đồng Đò" trong "Sóc Sơn")
+  const sortedSubRegions = [...knownSubRegions].sort((a, b) => b.length - a.length);
+  for (const sub of sortedSubRegions) {
+    if (norm.includes(normalize(sub))) {
+      filters.subRegion = sub;
+      break;
+    }
+  }
 
   // --- Khu vực: so khớp theo tên khu vực có thật trong DB, chuỗi dài hơn ưu tiên trước
   const sortedAreas = [...knownAreas].sort((a, b) => b.length - a.length);
@@ -221,6 +232,7 @@ export function parseQuery(
   // số khách/số phòng/tiện ích đã hiểu được. VD "Doris villa sóc sơn" sau khi
   // trừ "villa" (loại) và "sóc sơn" (khu vực) còn lại "doris" -> tìm theo tên.
   let remainder = norm;
+  if (filters.subRegion) remainder = remainder.replace(normalize(filters.subRegion), " ");
   if (filters.area) remainder = remainder.replace(normalize(filters.area), " ");
   if (!filters.area && filters.areaCluster) {
     // Không khớp đúng 1 khu vực cụ thể (khớp qua cụm vùng miền) -> bỏ luôn

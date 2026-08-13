@@ -163,7 +163,12 @@ export function resolveProductPricing(
   }
 
   if (!filters.date) {
-    return { rankingPrice: null };
+    // Không có "Ngày đi" cụ thể -> không đoán khung giá để HIỂN THỊ (context
+    // vẫn để trống, UI vẫn hiện đủ 3 khung). Nhưng nếu khách có nói ngân
+    // sách ("giá tầm X", "dưới X"), vẫn cần một con số để XẾP HẠNG theo giá —
+    // dùng price_weekday (đã đồng bộ vào cột `price`) làm ước lượng hợp lý,
+    // còn hơn bỏ hẳn qua yếu tố giá khi xếp hạng.
+    return { rankingPrice: product.price ?? null };
   }
 
   const { tier, price: basePrice } = getApplicablePrice(product, parseISODateLocal(filters.date), holidays);

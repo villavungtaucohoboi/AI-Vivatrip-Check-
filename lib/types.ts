@@ -26,6 +26,7 @@ export interface Product {
   product_name: string;
   type: ProductType;
   area: string;
+  sub_region: string | null;
   address: string | null;
   bedrooms: number | null;
   beds: number | null;
@@ -95,7 +96,9 @@ export interface ProductWithExtras extends Product {
 // Bộ lọc dùng chung cho cả tìm kiếm tự nhiên và bộ lọc thủ công
 export interface SearchFilters {
   area?: string;
-  areaCluster?: string[]; // các khu vực "cùng vùng miền" — dùng để mở rộng/giới hạn kết quả theo địa lý
+  areaCluster?: string[]; // các khu vực "cùng vùng miền" — CHỈ dùng để gợi ý mở rộng, không tự trộn vào kết quả chính
+  subRegion?: string; // tiểu khu vực (VD "Đồng Đò" trong "Sóc Sơn")
+  expandRegions?: string[]; // các khu vực Sale đã CHỦ ĐỘNG bấm "xem thêm" — chỉ khi có mới được trộn thêm vào kết quả
   type?: ProductType;
   guests?: number;
   bedrooms?: number;
@@ -133,12 +136,15 @@ export interface DatePricingContext {
 export interface RankedProduct extends Product {
   _score: number;
   _pricing?: DatePricingContext;
+  _reason?: string; // lý do khớp thực tế (VD "Đúng Đồng Đò • Giá lệch 200k • Đủ 2 tiện ích") — chỉ có ở Top 3
 }
 
 export interface SearchResponseBody {
   results: RankedProduct[];
   total: number;
   parsedFilters: SearchFilters;
+  /** Khu vực "lân cận" gợi ý mở rộng — CHỈ hiện làm nút bấm, không tự trộn vào results */
+  suggestedRegions?: string[];
 }
 
 export interface ImportRow {
@@ -146,6 +152,7 @@ export interface ImportRow {
   product_name: string;
   type: string;
   area: string;
+  sub_region?: string;
   address?: string;
   bedrooms?: number;
   beds?: number;
