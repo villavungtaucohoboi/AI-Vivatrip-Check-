@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { mapError, type ProductInput } from "@/lib/admin-types";
+import { normalizeAreaName } from "@/lib/normalize-area";
 
 export async function POST(req: NextRequest) {
   const body: { input: ProductInput; id?: string } = await req.json();
@@ -10,8 +11,10 @@ export async function POST(req: NextRequest) {
 
   // Villa/resort: `price` là cột tham khảo/sort nhanh, luôn đồng bộ = price_weekday.
   // Hotel: giữ nguyên giá trị admin nhập tay (giá phòng thấp nhất).
-  const payload: ProductInput =
-    input.type === "hotel" ? input : { ...input, price: input.price_weekday ?? null };
+  const payload: ProductInput = {
+    ...(input.type === "hotel" ? input : { ...input, price: input.price_weekday ?? null }),
+    area: normalizeAreaName(input.area),
+  };
 
   if (id) {
     const { error } = await supabase.from("products").update(payload).eq("id", id);

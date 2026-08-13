@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import type { ImportRow } from "@/lib/types";
+import { normalizeAreaName } from "@/lib/normalize-area";
 
 export async function POST(req: NextRequest) {
   const { rows }: { rows: ImportRow[] } = await req.json();
@@ -16,7 +17,7 @@ export async function POST(req: NextRequest) {
     product_code: r.product_code,
     product_name: r.product_name,
     type: r.type,
-    area: r.area,
+    area: normalizeAreaName(r.area),
     address: r.address ?? null,
     bedrooms: r.bedrooms ?? null,
     beds: r.beds ?? null,
