@@ -8,6 +8,7 @@ import { FilterSheet } from "@/components/filter-sheet";
 import { FilterBar } from "@/components/filter-bar";
 import { ProductGrid } from "@/components/product-grid";
 import { ProductCard } from "@/components/product-card";
+import { MotivationButton } from "@/components/motivation/motivation-button";
 import { EmptyState } from "@/components/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -231,6 +232,8 @@ export function SearchExperience({
           Nhập nhu cầu khách hoặc sử dụng bộ lọc
         </p>
       </div>
+
+      <MotivationButton />
 
       <div className="space-y-3">
         <SearchBar
