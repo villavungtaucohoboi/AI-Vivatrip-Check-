@@ -6,6 +6,15 @@ import { parseQuery } from "@/lib/query-parser";
 import { applyExplicitFilters, rankProducts } from "@/lib/ranking";
 import type { Holiday, Product, SearchRequestBody, SearchResponseBody } from "@/lib/types";
 
+function normalizeArea(str: string): string {
+  return str
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .trim();
+}
+
 // Đa số lượt tìm kiếm chỉ gõ câu tự nhiên, không dùng Bộ lọc thủ công — với
 // trường hợp đó, danh sách sản phẩm gốc (trước khi xếp hạng) không cần lọc
 // SQL theo điều kiện riêng của từng request, nên cache ngắn 15 giây để không
@@ -91,7 +100,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  let ranked = rankProducts((data ?? []) as Product[], mergedFilters, holidays);
+  // Câu tìm kiếm có nhắc khu vực/vùng miền (không phải Bộ lọc thủ công chọn
+  // tay) -> LOẠI HẲN sản phẩm ở vùng miền khác, không chỉ xếp hạng thấp hơn.
+  // VD tìm "Sóc Sơn" chấp nhận hiện thêm Hòa Bình/Ba Vì (cùng vùng) nhưng
+  // tuyệt đối không hiện Vũng Tàu/Phan Thiết. Bộ lọc thủ công chọn đúng 1
+  // khu vực thì giữ nguyên hành vi cũ (chỉ đúng khu vực đó).
+  let filteredData = (data ?? []) as Product[];
+  if (parsedFromQuery.areaCluster && !explicitFilters.area) {
+    const allowed = new Set(parsedFromQuery.areaCluster.map(normalizeArea));
+    filteredData = filteredData.filter((p) => allowed.has(normalizeArea(p.area)));
+  }
+
+  let ranked = rankProducts(filteredData, mergedFilters, holidays);
 
   if (hasDate && (explicitFilters.priceFrom != null || explicitFilters.priceTo != null)) {
     const from = explicitFilters.priceFrom ?? 0;
