@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/components/header";
 import { BottomNav } from "@/components/bottom-nav";
 import { SearchExperience } from "@/components/search-experience";
+import { normalizeAreaName } from "@/lib/normalize-area";
 
 // Nội dung sản phẩm không đổi liên tục — cho phép cache 30 giây để trang tải
 // gần như tức thì cho các lượt xem tiếp theo, thay vì luôn hỏi Supabase mới.
@@ -17,7 +18,16 @@ export default async function SearchPage() {
     supabase.from("products").select("id", { count: "exact", head: true }),
   ]);
 
-  const areas = (areaRows ?? []).map((r: { area: string }) => r.area);
+  // Gộp các biến thể hoa/thường của cùng 1 khu vực về 1 dòng duy nhất trong
+  // dropdown (phòng khi dữ liệu gốc chưa chạy migration chuẩn hóa) — không
+  // phụ thuộc vào việc database đã sạch hay chưa.
+  const areaSet = new Map<string, string>();
+  (areaRows ?? []).forEach((r: { area: string }) => {
+    const canonical = normalizeAreaName(r.area);
+    const key = canonical.toLowerCase();
+    if (!areaSet.has(key)) areaSet.set(key, canonical);
+  });
+  const areas = [...areaSet.values()].sort((a, b) => a.localeCompare(b, "vi"));
 
   return (
     <div className="min-h-dvh bg-paper pb-20 sm:pb-0">

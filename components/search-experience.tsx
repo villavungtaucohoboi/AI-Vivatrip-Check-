@@ -161,12 +161,21 @@ export function SearchExperience({
 
   function handleSubmitQuery() {
     if (query.trim()) setRecentSearches(addRecentSearch(query));
-    runSearch({ query, filters, offset: 0, append: false });
+    // Gõ câu tìm mới -> coi là tìm kiếm mới hoàn toàn, bỏ mọi khu vực đã
+    // "mở rộng" từ lần tìm trước (tránh lẫn kết quả khu vực cũ vào).
+    const freshFilters = { ...filters, expandRegions: undefined };
+    setFilters(freshFilters);
+    runSearch({ query, filters: freshFilters, offset: 0, append: false });
   }
 
   function handleApplyFilters(newFilters: SearchFilters) {
-    setFilters(newFilters);
-    runSearch({ query, filters: newFilters, offset: 0, append: false });
+    // Bấm "Tìm" ở Bộ lọc = ý định tìm kiếm mới -> luôn bỏ khu vực mở rộng cũ,
+    // dù Bộ lọc có đổi khu vực hay không (đây là nguyên nhân lỗi "tìm Sóc
+    // Sơn ra cả Hòa Bình" — expandRegions từ lần bấm "Xem thêm" trước đó bị
+    // giữ lại xuyên suốt các lần tìm sau).
+    const cleaned = { ...newFilters, expandRegions: undefined };
+    setFilters(cleaned);
+    runSearch({ query, filters: cleaned, offset: 0, append: false });
   }
 
   function handleClearFilters() {
@@ -247,7 +256,7 @@ export function SearchExperience({
                   onClick={() => {
                     setQuery(q);
                     setRecentSearches(addRecentSearch(q));
-                    runSearch({ query: q, filters, offset: 0, append: false });
+                    runSearch({ query: q, filters: { ...filters, expandRegions: undefined }, offset: 0, append: false });
                   }}
                 >
                   {q}
