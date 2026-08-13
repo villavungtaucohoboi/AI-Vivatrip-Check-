@@ -45,12 +45,19 @@ export function scoreProduct(
     }
   }
 
-  // 1. Khu vực
+  // 1. Khu vực — đúng khu vực > cùng vùng miền (VD Sóc Sơn ~ Hòa Bình) > không liên quan
   if (filters.area) {
     const a = normalize(product.area);
     const b = normalize(filters.area);
     if (a === b) score += W_AREA;
     else if (a.includes(b) || b.includes(a)) score += W_AREA * 0.7;
+    else if (filters.areaCluster?.some((c) => normalize(c) === a)) score += W_AREA * 0.35;
+  } else if (filters.areaCluster) {
+    // Không có 1 khu vực cụ thể (VD câu chỉ nói "quanh Hà Nội") — mọi khu vực
+    // trong cùng vùng đều coi là phù hợp như nhau.
+    if (filters.areaCluster.some((c) => normalize(c) === normalize(product.area))) {
+      score += W_AREA * 0.6;
+    }
   }
 
   // 2. Loại sản phẩm
@@ -68,9 +75,24 @@ export function scoreProduct(
     }
   }
 
-  // 4. Tiện ích chính nếu khách có yêu cầu (VD "view hồ") — ưu tiên trước giá
+  // 4. Tiện ích chính nếu khách có yêu cầu (VD "view hồ") — ưu tiên trước giá.
+  // Khớp cả khi chưa tick ô tiện ích nhưng Ghi chú có nhắc tới (VD note ghi
+  // "có phòng karaoke" dù chưa tick ô Karaoke trong form) — sale thường quên tick.
+  const AMENITY_NOTE_KEYWORDS: Record<string, string[]> = {
+    pool: ["ho boi", "be boi"],
+    near_beach: ["sat bien"],
+    sea_view: ["view bien"],
+    karaoke: ["karaoke"],
+    bbq: ["bbq", "nuong"],
+    pickleball: ["pickleball"],
+    near_lake: ["view ho", "gan ho"],
+  };
+  const noteNorm = product.note ? normalize(product.note) : "";
   (["pool", "near_beach", "sea_view", "karaoke", "bbq", "pickleball", "near_lake"] as const).forEach((key) => {
-    if (filters[key] && product[key]) score += W_AMENITY_EACH;
+    if (!filters[key]) return;
+    const hasFlag = !!product[key];
+    const noteHasIt = noteNorm ? AMENITY_NOTE_KEYWORDS[key].some((kw) => noteNorm.includes(kw)) : false;
+    if (hasFlag || noteHasIt) score += W_AMENITY_EACH;
   });
 
   // 5. Giá gần ngân sách nhất (hoặc trong khoảng giá yêu cầu) — dùng

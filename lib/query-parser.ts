@@ -1,4 +1,5 @@
 import { ProductType, SearchFilters } from "./types";
+import { getClusterAreas, findClusterByPhrase } from "./area-clusters";
 
 // Parser dựa trên keyword/regex — KHÔNG gọi AI, luôn chạy được kể cả
 // khi chưa cấu hình bất kỳ AI API nào. Đây là bộ phân tích chính của app.
@@ -157,8 +158,17 @@ export function parseQuery(
   for (const area of sortedAreas) {
     if (norm.includes(normalize(area))) {
       filters.area = area;
+      filters.areaCluster = getClusterAreas(area);
       break;
     }
+  }
+
+  // Không khớp đúng 1 khu vực cụ thể nào, nhưng câu chữ có nhắc tới 1 "vùng
+  // lớn" (VD "villa quanh Hà Nội") -> mở rộng ra cả vùng đó, không chỉ đích
+  // danh 1 khu vực. Vẫn giới hạn địa lý, không để lọt sang vùng khác.
+  if (!filters.areaCluster) {
+    const clusterByPhrase = findClusterByPhrase(norm);
+    if (clusterByPhrase) filters.areaCluster = clusterByPhrase;
   }
 
   // --- Loại sản phẩm
@@ -212,6 +222,11 @@ export function parseQuery(
   // trừ "villa" (loại) và "sóc sơn" (khu vực) còn lại "doris" -> tìm theo tên.
   let remainder = norm;
   if (filters.area) remainder = remainder.replace(normalize(filters.area), " ");
+  if (!filters.area && filters.areaCluster) {
+    // Không khớp đúng 1 khu vực cụ thể (khớp qua cụm vùng miền) -> bỏ luôn
+    // cụm từ vùng miền đó ra khỏi phần tìm tên, tránh rò rỉ kiểu "quanh ha noi"
+    remainder = remainder.replace(/\bquanh\b|\bgan\b|\bha noi\b|\bha long\b|\bquang ninh\b|\bvung tau\b|\bphan thiet\b|\bmui ne\b|\bnha trang\b|\bda nang\b|\bda lat\b/g, " ");
+  }
   for (const { keywords, type } of TYPE_KEYWORDS) {
     if (filters.type === type) keywords.forEach((k) => (remainder = remainder.replace(k, " ")));
   }

@@ -95,6 +95,7 @@ export interface ProductWithExtras extends Product {
 // Bộ lọc dùng chung cho cả tìm kiếm tự nhiên và bộ lọc thủ công
 export interface SearchFilters {
   area?: string;
+  areaCluster?: string[]; // các khu vực "cùng vùng miền" — dùng để mở rộng/giới hạn kết quả theo địa lý
   type?: ProductType;
   guests?: number;
   bedrooms?: number;
