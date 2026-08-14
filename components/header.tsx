@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { CalendarClock, Dices, Lock, PartyPopper, Plus, Search, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useClientRole } from "@/lib/use-client-role";
+import { SalesTicker } from "@/components/sales-ticker";
 import type { UserRole } from "@/lib/types";
 
 export function Header({ role: initialRole }: { role: UserRole }) {
@@ -73,6 +74,7 @@ export function Header({ role: initialRole }: { role: UserRole }) {
           </button>
         )}
       </div>
+      <SalesTicker />
     </header>
   );
 }
