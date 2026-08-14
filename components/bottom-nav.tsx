@@ -12,6 +12,8 @@ export function BottomNav({ role: initialRole }: { role: UserRole }) {
   const pathname = usePathname();
   const onHolidayFunds = pathname.startsWith("/holiday-funds");
 
+  if (pathname === "/admin/login") return null;
+
   const items = [
     { href: "/search", label: "Tìm sản phẩm", icon: Search },
     { href: "/holiday-funds", label: "Quỹ ngày lễ", icon: PartyPopper },

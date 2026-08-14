@@ -14,8 +14,6 @@ import {
   Waves,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { Header } from "@/components/header";
-import { BottomNav } from "@/components/bottom-nav";
 import { ProductGallery } from "@/components/product-gallery";
 import { CopyButton } from "@/components/copy-button";
 import { DownloadImagesButton } from "@/components/download-images-button";
@@ -99,8 +97,6 @@ export default async function ProductDetailPage({
       : pricingContext?.finalPrice ?? pricingContext?.basePrice ?? product.price_weekday;
 
   return (
-    <div className="min-h-dvh bg-paper pb-20 sm:pb-0">
-      <Header role={role} />
 
       <main className="mx-auto max-w-3xl px-4 py-6 sm:px-6 sm:py-8">
         <Link
@@ -216,8 +212,5 @@ export default async function ProductDetailPage({
           )}
         </div>
       </main>
-
-      <BottomNav role={role} />
-    </div>
   );
 }

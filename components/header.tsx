@@ -19,6 +19,9 @@ export function Header({ role: initialRole }: { role: UserRole }) {
     router.refresh();
   }
 
+  // Trang gác cổng Admin không nên hiện sẵn menu điều hướng trước khi đăng nhập
+  if (pathname === "/admin/login") return null;
+
   const navItem = (href: string, label: string, Icon: typeof Search) => (
     <Link
       href={href}

@@ -2,8 +2,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { Header } from "@/components/header";
-import { BottomNav } from "@/components/bottom-nav";
 import { ProductForm } from "@/components/admin/product-form";
 import type { HotelRate, Product, ProductImage } from "@/lib/types";
 
@@ -31,8 +29,6 @@ export default async function EditProductPage({
   ]);
 
   return (
-    <div className="min-h-dvh bg-paper pb-20 sm:pb-0">
-      <Header role="admin" />
 
       <main className="mx-auto max-w-2xl px-4 py-6 sm:px-6 sm:py-8">
         <Link
@@ -49,8 +45,5 @@ export default async function EditProductPage({
           rates={(rates ?? []) as HotelRate[]}
         />
       </main>
-
-      <BottomNav role="admin" />
-    </div>
   );
 }

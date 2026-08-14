@@ -1,8 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { Header } from "@/components/header";
-import { BottomNav } from "@/components/bottom-nav";
 import { MotivationManager } from "@/components/admin/motivation-manager";
 import type { MotivationMessage, MotivationQuote } from "@/lib/motivation-types";
 
@@ -15,8 +13,6 @@ export default async function AdminMotivationPage() {
   ]);
 
   return (
-    <div className="min-h-dvh bg-paper pb-20 sm:pb-0">
-      <Header role="admin" />
 
       <main className="mx-auto max-w-2xl px-4 py-6 sm:px-6 sm:py-8">
         <Link
@@ -36,8 +32,5 @@ export default async function AdminMotivationPage() {
           initialQuotes={(quotes ?? []) as MotivationQuote[]}
         />
       </main>
-
-      <BottomNav role="admin" />
-    </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -15,6 +15,18 @@ import { SheetFormDialog } from "@/components/holiday-funds/sheet-form-dialog";
 import { ConfirmDialog } from "@/components/holiday-funds/confirm-dialog";
 import type { HolidayFundPost, HolidayFundSheet } from "@/lib/holiday-fund-types";
 
+const STORAGE_KEY = "vivatrip_holiday_funds_state_v1";
+
+function loadSavedState(): { activeSheetId: string; subTab: "summary" | "feed" } | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function HolidayFundsApp({
   initialSheets,
   isAdmin: initialIsAdmin,
@@ -26,9 +38,15 @@ export function HolidayFundsApp({
   const router = useRouter();
   const supabase = createClient();
 
+  // Nhớ lại đúng Sheet/tab đang xem — rời trang rồi quay lại không bị về mặc định.
+  const saved = useRef(loadSavedState()).current;
+  const savedSheetStillExists = saved && initialSheets.some((s) => s.id === saved.activeSheetId);
+
   const [sheets, setSheets] = useState(initialSheets);
-  const [activeSheetId, setActiveSheetId] = useState<string | null>(initialSheets[0]?.id ?? null);
-  const [subTab, setSubTab] = useState<"summary" | "feed">("summary");
+  const [activeSheetId, setActiveSheetId] = useState<string | null>(
+    savedSheetStillExists ? saved!.activeSheetId : initialSheets[0]?.id ?? null
+  );
+  const [subTab, setSubTab] = useState<"summary" | "feed">(savedSheetStillExists ? saved!.subTab : "summary");
   const [posts, setPosts] = useState<HolidayFundPost[]>([]);
   const [loadingPosts, setLoadingPosts] = useState(false);
   const [search, setSearch] = useState("");
@@ -40,6 +58,15 @@ export function HolidayFundsApp({
   const [editingSheet, setEditingSheet] = useState<HolidayFundSheet | null>(null);
   const [deletePostTarget, setDeletePostTarget] = useState<HolidayFundPost | null>(null);
   const [deleteSheetTarget, setDeleteSheetTarget] = useState<HolidayFundSheet | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !activeSheetId) return;
+    try {
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ activeSheetId, subTab }));
+    } catch {
+      // sessionStorage đầy/bị chặn -> bỏ qua
+    }
+  }, [activeSheetId, subTab]);
 
   const activeSheet = sheets.find((s) => s.id === activeSheetId) ?? null;
 

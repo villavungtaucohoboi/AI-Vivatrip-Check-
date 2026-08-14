@@ -1,6 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { Header } from "@/components/header";
-import { BottomNav } from "@/components/bottom-nav";
 import { SearchExperience } from "@/components/search-experience";
 import { normalizeAreaName } from "@/lib/normalize-area";
 
@@ -30,12 +28,8 @@ export default async function SearchPage() {
   const areas = [...areaSet.values()].sort((a, b) => a.localeCompare(b, "vi"));
 
   return (
-    <div className="min-h-dvh bg-paper pb-20 sm:pb-0">
-      <Header role="sale" />
-      <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
-        <SearchExperience areas={areas} hasAnyProducts={(count ?? 0) > 0} isAdmin={false} />
-      </main>
-      <BottomNav role="sale" />
-    </div>
+    <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
+      <SearchExperience areas={areas} hasAnyProducts={(count ?? 0) > 0} isAdmin={false} />
+    </main>
   );
 }

@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { Toaster } from "sonner";
 import { ServiceWorkerRegister } from "@/components/service-worker-register";
+import { Header } from "@/components/header";
+import { BottomNav } from "@/components/bottom-nav";
 import "./globals.css";
 
 const inter = Inter({
@@ -39,8 +41,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="vi" className={inter.variable}>
-      <body className="font-sans">
+      <body className="min-h-dvh bg-paper pb-20 font-sans sm:pb-0">
+        <Header role="sale" />
         {children}
+        <BottomNav role="sale" />
         <Toaster position="top-center" richColors closeButton />
         <ServiceWorkerRegister />
       </body>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Link2, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -22,6 +22,24 @@ import type { AvailabilityLink, AvailabilityLinkRegion } from "@/lib/availabilit
 const ALL_TAB = "__all__";
 type PropertyCategory = "villa" | "khach_san_resort";
 
+const STORAGE_KEY = "vivatrip_availability_links_state_v1";
+
+interface SavedState {
+  category: PropertyCategory;
+  activeTab: string;
+  search: string;
+}
+
+function loadSavedState(): SavedState | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as SavedState) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function AvailabilityLinksApp({
   initialRegions,
   isAdmin: initialIsAdmin,
@@ -33,12 +51,17 @@ export function AvailabilityLinksApp({
   const router = useRouter();
   const supabase = createClient();
 
+  // Nhớ lại đúng Sheet/khu vực/ô tìm kiếm đang xem — để rời trang rồi quay
+  // lại (VD bấm sang Tìm sản phẩm rồi bấm lại Link check lịch) không bị về
+  // trạng thái mặc định.
+  const saved = useRef(loadSavedState()).current;
+
   const [regions, setRegions] = useState(initialRegions);
-  const [category, setCategory] = useState<PropertyCategory>("villa");
-  const [activeTab, setActiveTab] = useState<string>(ALL_TAB);
+  const [category, setCategory] = useState<PropertyCategory>(saved?.category ?? "villa");
+  const [activeTab, setActiveTab] = useState<string>(saved?.activeTab ?? ALL_TAB);
   const [links, setLinks] = useState<AvailabilityLink[]>([]);
   const [loading, setLoading] = useState(false);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(saved?.search ?? "");
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
   const [recentIds, setRecentIds] = useState<string[]>([]);
 
@@ -53,6 +76,15 @@ export function AvailabilityLinksApp({
     setFavoriteIds(getFavoriteIds());
     setRecentIds(getRecentlyOpenedIds());
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ category, activeTab, search }));
+    } catch {
+      // sessionStorage đầy/bị chặn -> bỏ qua, không ảnh hưởng chức năng
+    }
+  }, [category, activeTab, search]);
 
   const regionsInCategory = useMemo(
     () => regions.filter((r) => r.property_category === category).sort((a, b) => a.sort_order - b.sort_order),

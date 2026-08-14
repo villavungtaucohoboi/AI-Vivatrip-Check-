@@ -1,6 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { Header } from "@/components/header";
-import { BottomNav } from "@/components/bottom-nav";
 import { AvailabilityLinksApp } from "@/components/availability-links/availability-links-app";
 import type { AvailabilityLinkRegion } from "@/lib/availability-link-types";
 
@@ -14,8 +12,6 @@ export default async function AvailabilityLinksPage() {
     .order("sort_order");
 
   return (
-    <div className="min-h-dvh bg-paper pb-20 sm:pb-6">
-      <Header role="sale" />
       <main className="mx-auto max-w-3xl px-4 py-5 sm:px-6 sm:py-7">
         <div className="mb-4">
           <h1 className="text-[22px] font-bold tracking-tight text-ink">Link check lịch trống</h1>
@@ -25,7 +21,5 @@ export default async function AvailabilityLinksPage() {
         </div>
         <AvailabilityLinksApp initialRegions={(regions ?? []) as AvailabilityLinkRegion[]} isAdmin={false} />
       </main>
-      <BottomNav role="sale" />
-    </div>
   );
 }
