@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarDays, Heart, Plus, Upload } from "lucide-react";
+import { CalendarDays, Heart, Plus, Trophy, Upload } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/components/header";
 import { BottomNav } from "@/components/bottom-nav";
@@ -36,6 +36,12 @@ export default async function AdminProductsPage() {
               <Button variant="outline">
                 <Heart className="h-4 w-4" />
                 Nội dung động lực
+              </Button>
+            </Link>
+            <Link href="/admin/leaderboard">
+              <Button variant="outline">
+                <Trophy className="h-4 w-4" />
+                Băng chữ Top 3
               </Button>
             </Link>
             <Link href="/admin/products/import">
