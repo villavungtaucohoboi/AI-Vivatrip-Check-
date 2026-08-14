@@ -4,7 +4,12 @@ import { createClient } from "@/lib/supabase/server";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const body: { name?: string; sort_order?: number } = await req.json();
+  const body: {
+    name?: string;
+    property_category?: "villa" | "khach_san_resort";
+    is_chain?: boolean;
+    sort_order?: number;
+  } = await req.json();
 
   const supabase = await createClient();
   const { error } = await supabase.from("availability_link_regions").update(body).eq("id", id);

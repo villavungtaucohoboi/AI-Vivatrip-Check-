@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { Link2, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { useClientRole } from "@/lib/use-client-role";
@@ -20,6 +20,7 @@ import {
 import type { AvailabilityLink, AvailabilityLinkRegion } from "@/lib/availability-link-types";
 
 const ALL_TAB = "__all__";
+type PropertyCategory = "villa" | "khach_san_resort";
 
 export function AvailabilityLinksApp({
   initialRegions,
@@ -33,7 +34,8 @@ export function AvailabilityLinksApp({
   const supabase = createClient();
 
   const [regions, setRegions] = useState(initialRegions);
-  const [activeTab, setActiveTab] = useState<string>(initialRegions[0]?.id ?? ALL_TAB);
+  const [category, setCategory] = useState<PropertyCategory>("villa");
+  const [activeTab, setActiveTab] = useState<string>(ALL_TAB);
   const [links, setLinks] = useState<AvailabilityLink[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
@@ -52,10 +54,26 @@ export function AvailabilityLinksApp({
     setRecentIds(getRecentlyOpenedIds());
   }, []);
 
+  const regionsInCategory = useMemo(
+    () => regions.filter((r) => r.property_category === category).sort((a, b) => a.sort_order - b.sort_order),
+    [regions, category]
+  );
+
+  function handleSetCategory(next: PropertyCategory) {
+    setCategory(next);
+    setActiveTab(ALL_TAB);
+  }
+
   async function fetchLinks() {
     setLoading(true);
+    const regionIds = regionsInCategory.map((r) => r.id);
+    if (regionIds.length === 0) {
+      setLinks([]);
+      setLoading(false);
+      return;
+    }
     let query = supabase.from("availability_links").select("*").order("sort_order");
-    if (activeTab !== ALL_TAB) query = query.eq("region_id", activeTab);
+    query = activeTab === ALL_TAB ? query.in("region_id", regionIds) : query.eq("region_id", activeTab);
     if (!isAdmin) query = query.eq("is_active", true);
     const { data, error } = await query;
     if (error) toast.error("Không tải được dữ liệu: " + error.message);
@@ -66,7 +84,7 @@ export function AvailabilityLinksApp({
   useEffect(() => {
     fetchLinks();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, isAdmin]);
+  }, [activeTab, isAdmin, category]);
 
   const regionNameById = useMemo(
     () => Object.fromEntries(regions.map((r) => [r.id, r.name])),
@@ -107,14 +125,14 @@ export function AvailabilityLinksApp({
     setRecentIds(getRecentlyOpenedIds());
   }
 
-  async function refreshRegions(selectNewest = false) {
+  async function refreshRegions(selectNewestId?: string) {
     const { data } = await supabase
       .from("availability_link_regions")
       .select("*")
       .order("sort_order");
     const list = (data ?? []) as AvailabilityLinkRegion[];
     setRegions(list);
-    if (selectNewest && list.length > 0) setActiveTab(list[list.length - 1].id);
+    if (selectNewestId) setActiveTab(selectNewestId);
     router.refresh();
   }
 
@@ -145,7 +163,7 @@ export function AvailabilityLinksApp({
     }
     const remaining = regions.filter((r) => r.id !== deleteRegionTarget.id);
     setRegions(remaining);
-    if (activeTab === deleteRegionTarget.id) setActiveTab(remaining[0]?.id ?? ALL_TAB);
+    if (activeTab === deleteRegionTarget.id) setActiveTab(ALL_TAB);
     setDeleteRegionTarget(null);
     toast.success("Đã xóa khu vực");
     router.refresh();
@@ -156,6 +174,25 @@ export function AvailabilityLinksApp({
 
   return (
     <div>
+      <div className="mb-3 flex rounded-xl border border-border bg-white p-1">
+        <button
+          onClick={() => handleSetCategory("villa")}
+          className={`flex-1 rounded-lg py-2.5 text-[13.5px] font-semibold ${
+            category === "villa" ? "bg-teal text-white" : "text-ink-muted hover:bg-paper-dim"
+          }`}
+        >
+          🏡 Villa
+        </button>
+        <button
+          onClick={() => handleSetCategory("khach_san_resort")}
+          className={`flex-1 rounded-lg py-2.5 text-[13.5px] font-semibold ${
+            category === "khach_san_resort" ? "bg-teal text-white" : "text-ink-muted hover:bg-paper-dim"
+          }`}
+        >
+          🏨 Khách sạn / Resort
+        </button>
+      </div>
+
       <div className="flex gap-1.5 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <button
           onClick={() => setActiveTab(ALL_TAB)}
@@ -165,14 +202,21 @@ export function AvailabilityLinksApp({
         >
           Tất cả
         </button>
-        {regions.map((r) => (
+        {regionsInCategory.map((r) => (
           <button
             key={r.id}
             onClick={() => setActiveTab(r.id)}
-            className={`shrink-0 whitespace-nowrap rounded-xl px-4 py-2.5 text-[13.5px] font-semibold ${
-              activeTab === r.id ? "bg-teal text-white" : "border border-border bg-white text-ink-muted"
+            className={`shrink-0 flex items-center gap-1 whitespace-nowrap rounded-xl px-4 py-2.5 text-[13.5px] font-semibold ${
+              activeTab === r.id
+                ? r.is_chain
+                  ? "bg-sand text-white"
+                  : "bg-teal text-white"
+                : r.is_chain
+                ? "border border-sand/50 bg-sand-light text-[#7A5F2B]"
+                : "border border-border bg-white text-ink-muted"
             }`}
           >
+            {r.is_chain && <Link2 className="h-3.5 w-3.5" />}
             {r.name}
           </button>
         ))}
@@ -189,6 +233,13 @@ export function AvailabilityLinksApp({
         )}
       </div>
 
+      {activeRegion?.is_chain && (
+        <div className="mt-3 rounded-xl bg-sand-light p-3 text-[12px] text-[#7A5F2B]">
+          🔗 Đây là 1 sheet riêng cho cả hệ thống <b>{activeRegion.name}</b> — không tách theo vùng miền vì
+          là chuỗi. Gõ tên tỉnh/thành vào ô tìm kiếm bên dưới để lọc nhanh.
+        </div>
+      )}
+
       {isAdmin && activeRegion && (
         <div className="mt-3 flex items-center gap-2">
           <h2 className="text-[15px] font-bold text-ink">{activeRegion.name}</h2>
@@ -198,7 +249,7 @@ export function AvailabilityLinksApp({
               setRegionFormOpen(true);
             }}
             className="rounded-lg p-1.5 text-ink-muted hover:bg-paper-dim"
-            title="Đổi tên"
+            title="Sửa"
           >
             <Pencil className="h-3.5 w-3.5" />
           </button>
@@ -288,6 +339,11 @@ export function AvailabilityLinksApp({
 
       {loading ? (
         <div className="py-16 text-center text-sm text-ink-muted">Đang tải...</div>
+      ) : regionsInCategory.length === 0 ? (
+        <EmptyState
+          title={category === "villa" ? "Chưa có sheet Villa nào" : "Chưa có sheet Khách sạn/Resort nào"}
+          description={isAdmin ? 'Bấm "+" cạnh tab để tạo sheet đầu tiên.' : "Liên hệ Admin để tạo sheet."}
+        />
       ) : filteredLinks.length === 0 ? (
         <EmptyState
           title={search.trim() ? "Không tìm thấy nguồn nào" : "Chưa có link check lịch"}
@@ -342,8 +398,8 @@ export function AvailabilityLinksApp({
       <LinkFormDialog
         open={linkFormOpen}
         onOpenChange={setLinkFormOpen}
-        regions={regions}
-        defaultRegionId={activeTab !== ALL_TAB ? activeTab : regions[0]?.id}
+        regions={regionsInCategory}
+        defaultRegionId={activeTab !== ALL_TAB ? activeTab : regionsInCategory[0]?.id}
         editingLink={editingLink}
         onSaved={fetchLinks}
       />
@@ -352,7 +408,8 @@ export function AvailabilityLinksApp({
         open={regionFormOpen}
         onOpenChange={setRegionFormOpen}
         editingRegion={editingRegion}
-        onSaved={() => refreshRegions(!editingRegion)}
+        defaultCategory={category}
+        onSaved={(newId) => refreshRegions(!editingRegion ? newId : undefined)}
       />
 
       <ConfirmDialog

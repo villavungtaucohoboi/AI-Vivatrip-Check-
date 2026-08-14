@@ -3,7 +3,11 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
 export async function POST(req: NextRequest) {
-  const { name }: { name: string } = await req.json();
+  const {
+    name,
+    property_category,
+    is_chain,
+  }: { name: string; property_category?: "villa" | "khach_san_resort"; is_chain?: boolean } = await req.json();
   if (!name?.trim()) {
     return NextResponse.json({ error: "Vui lòng nhập tên khu vực." }, { status: 400 });
   }
@@ -15,7 +19,12 @@ export async function POST(req: NextRequest) {
 
   const { data, error } = await supabase
     .from("availability_link_regions")
-    .insert({ name: name.trim(), sort_order: count ?? 0 })
+    .insert({
+      name: name.trim(),
+      property_category: property_category ?? "villa",
+      is_chain: !!is_chain,
+      sort_order: count ?? 0,
+    })
     .select("id")
     .single();
 

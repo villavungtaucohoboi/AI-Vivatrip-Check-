@@ -20,7 +20,7 @@ export default async function AvailabilityLinksPage() {
         <div className="mb-4">
           <h1 className="text-[22px] font-bold tracking-tight text-ink">Link check lịch trống</h1>
           <p className="mt-0.5 text-[13.5px] text-ink-muted">
-            Chọn khu vực, bấm vào nguồn để mở lịch check của đối tác.
+            Chọn "Lịch trống" hoặc "Bảng giá", chọn khu vực rồi bấm vào nguồn để mở nhanh.
           </p>
         </div>
         <AvailabilityLinksApp initialRegions={(regions ?? []) as AvailabilityLinkRegion[]} isAdmin={false} />
