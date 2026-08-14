@@ -1,6 +1,8 @@
 export interface AvailabilityLinkRegion {
   id: string;
   name: string;
+  property_category: "villa" | "khach_san_resort";
+  is_chain: boolean;
   sort_order: number;
   created_by: string | null;
   created_at: string;
