@@ -28,14 +28,3 @@
 .tabular-price {
   font-variant-numeric: tabular-nums;
 }
-
-/* Băng chữ chạy Top 3 doanh số — cuộn liền mạch (nội dung được lặp đôi
-   trong component nên chỉ cần dịch đúng 50% chiều rộng track) */
-@keyframes ticker-scroll {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(-50%);
-  }
-}
