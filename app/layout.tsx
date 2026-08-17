@@ -4,6 +4,7 @@ import { Toaster } from "sonner";
 import { ServiceWorkerRegister } from "@/components/service-worker-register";
 import { Header } from "@/components/header";
 import { BottomNav } from "@/components/bottom-nav";
+import { ChatWidget } from "@/components/chat/chat-widget";
 import "./globals.css";
 
 const inter = Inter({
@@ -45,6 +46,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Header role="sale" />
         {children}
         <BottomNav role="sale" />
+        <ChatWidget />
         <Toaster position="top-center" richColors closeButton />
         <ServiceWorkerRegister />
       </body>

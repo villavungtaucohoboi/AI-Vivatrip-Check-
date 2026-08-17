@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarDays, Heart, Plus, Upload } from "lucide-react";
+import { CalendarDays, Heart, MessageCircle, Plus, Upload } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
 import { AdminProductTable } from "@/components/admin/admin-product-table";
@@ -32,6 +32,12 @@ export default async function AdminProductsPage() {
               <Button variant="outline">
                 <Heart className="h-4 w-4" />
                 Nội dung động lực
+              </Button>
+            </Link>
+            <Link href="/admin/chat">
+              <Button variant="outline">
+                <MessageCircle className="h-4 w-4" />
+                Chat chung
               </Button>
             </Link>
             <Link href="/admin/products/import">
