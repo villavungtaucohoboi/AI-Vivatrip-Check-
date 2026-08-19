@@ -16,7 +16,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { error } = await supabase.from("payroll_periods").update(payload).eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
-  if (body.status === "locked" || (current.status === "locked" && body.status !== "locked")) {
+  if (body.status === "locked" || current.status === "locked") {
     await supabase.from("payroll_audit_logs").insert({
       actor: body.actor?.trim() || "Admin",
       entity_type: "payroll_period",
