@@ -128,7 +128,7 @@ export function ChatWidget() {
     }
   }
 
-  if (pathname === "/admin/login") return null;
+  if (pathname === "/admin/login" || pathname.startsWith("/payroll")) return null;
 
   return (
     <>

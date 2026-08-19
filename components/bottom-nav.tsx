@@ -12,7 +12,7 @@ export function BottomNav({ role: initialRole }: { role: UserRole }) {
   const pathname = usePathname();
   const onHolidayFunds = pathname.startsWith("/holiday-funds");
 
-  if (pathname === "/admin/login") return null;
+  if (pathname === "/admin/login" || pathname.startsWith("/payroll")) return null;
 
   const items = [
     { href: "/search", label: "Tìm sản phẩm", icon: Search },

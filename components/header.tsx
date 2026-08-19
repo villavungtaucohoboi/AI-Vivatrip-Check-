@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { CalendarClock, Dices, Lock, PartyPopper, Plus, Search, Settings } from "lucide-react";
+import { CalendarClock, Dices, Lock, PartyPopper, Plus, Search, Settings, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useClientRole } from "@/lib/use-client-role";
 import type { UserRole } from "@/lib/types";
@@ -20,7 +20,7 @@ export function Header({ role: initialRole }: { role: UserRole }) {
   }
 
   // Trang gác cổng Admin không nên hiện sẵn menu điều hướng trước khi đăng nhập
-  if (pathname === "/admin/login") return null;
+  if (pathname === "/admin/login" || pathname.startsWith("/payroll")) return null;
 
   const navItem = (href: string, label: string, Icon: typeof Search) => (
     <Link
@@ -54,6 +54,7 @@ export function Header({ role: initialRole }: { role: UserRole }) {
           {navItem("/holiday-funds", "Quỹ ngày lễ", PartyPopper)}
           {navItem("/availability-links", "Link check lịch", CalendarClock)}
           {navItem("/daily-wishes", "Lời chúc", Dices)}
+          {navItem("/payroll", "Bảng lương", Wallet)}
           {role === "admin" && navItem("/admin/products", "Quản lý sản phẩm", Settings)}
           {role === "admin" && (
             <Link href="/admin/products/new">
