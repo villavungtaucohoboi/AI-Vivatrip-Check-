@@ -1,4 +1,6 @@
-import "server-only";
+// Hàm tính THUẦN TOÁN HỌC, không đụng gì tới database/secret — an toàn dùng
+// cả ở client (Salary Editor xem trước khi gõ) lẫn server (route lưu thật
+// sự dùng lại đúng hàm này, không tin số client tính gửi lên).
 
 export interface Tier {
   min: number;
