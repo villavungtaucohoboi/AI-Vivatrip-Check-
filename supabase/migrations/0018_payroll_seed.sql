@@ -62,7 +62,7 @@ insert into public.payslips (payroll_period_id, employee_id, scheme_snapshot, to
 select period.id, emp.id, '{}'::jsonb, 22100000, 1155079, 20944921, 'approved'
 from period, emp;
 
-with slip as (select id from public.payslips p join public.employees e on e.id=p.employee_id where e.employee_code='NV001')
+with slip as (select p.id from public.payslips p join public.employees e on e.id=p.employee_id where e.employee_code='NV001')
 insert into public.payslip_items (payslip_id, component_name, component_type, calculation_type, calculated_value, breakdown_json, sort_order)
 select slip.id, v.name, v.ctype, v.calc, v.val, v.breakdown::jsonb, v.sort
 from slip, (values
@@ -82,7 +82,7 @@ insert into public.payslips (payroll_period_id, employee_id, scheme_snapshot, to
 select period.id, emp.id, '{}'::jsonb, 23380000, 480000, 22900000, 'approved'
 from period, emp;
 
-with slip as (select id from public.payslips p join public.employees e on e.id=p.employee_id where e.employee_code='NV002')
+with slip as (select p.id from public.payslips p join public.employees e on e.id=p.employee_id where e.employee_code='NV002')
 insert into public.payslip_items (payslip_id, component_name, component_type, calculation_type, calculated_value, breakdown_json, sort_order)
 select slip.id, v.name, v.ctype, v.calc, v.val, v.breakdown::jsonb, v.sort
 from slip, (values
