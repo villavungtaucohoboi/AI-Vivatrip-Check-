@@ -32,6 +32,7 @@ export interface Product {
   beds: number | null;
   standard_guests: number | null;
   max_guests: number | null;
+  extra_guest_fee: number | null;
   /** Villa/resort: = price_weekday (tham khảo/sort khi không có ngày). Hotel: giá phòng thấp nhất, nhập tay. */
   price: number | null;
   /** Villa/resort only — null cho hotel */
@@ -158,6 +159,7 @@ export interface ImportRow {
   beds?: number;
   standard_guests?: number;
   max_guests?: number;
+  extra_guest_fee?: number;
   /** Hotel: giá phòng thấp nhất. Villa/resort: bỏ trống, dùng 3 cột giá theo thứ bên dưới. */
   price?: number;
   price_weekday?: number;

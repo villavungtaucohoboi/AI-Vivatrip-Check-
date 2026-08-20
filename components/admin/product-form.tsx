@@ -98,6 +98,7 @@ export function ProductForm({
     beds: product?.beds ?? null,
     standard_guests: product?.standard_guests ?? null,
     max_guests: product?.max_guests ?? null,
+    extra_guest_fee: product?.extra_guest_fee ?? null,
     price: product?.price ?? null,
     price_weekday: product?.price_weekday ?? null,
     price_friday_sunday: product?.price_friday_sunday ?? null,
@@ -321,26 +322,49 @@ export function ProductForm({
             />
           </div>
           <div>
-            <Label htmlFor="standard_guests">Sức chứa tiêu chuẩn</Label>
+            <Label htmlFor="standard_guests">Khách tiêu chuẩn *</Label>
             <Input
               id="standard_guests"
               type="number"
               min={0}
+              required
               value={form.standard_guests ?? ""}
               onChange={(e) =>
                 set("standard_guests", e.target.value ? Number(e.target.value) : null)
               }
+              placeholder="VD: 15"
             />
+            <p className="mt-1 text-[11px] text-ink-muted">
+              Giá bên dưới được hiểu là giá cho đúng số khách này — bắt buộc phải nhập.
+            </p>
           </div>
           <div>
-            <Label htmlFor="max_guests">Sức chứa tối đa</Label>
+            <Label htmlFor="max_guests">Khách tối đa thực tế</Label>
             <Input
               id="max_guests"
               type="number"
               min={0}
               value={form.max_guests ?? ""}
               onChange={(e) => set("max_guests", e.target.value ? Number(e.target.value) : null)}
+              placeholder="Để trống nếu chưa xác nhận"
             />
+            <p className="mt-1 text-[11px] text-ink-muted">
+              Không bắt buộc — để trống thì hệ thống tự ước lượng khi tìm kiếm, không hiện ra cho khách.
+            </p>
+          </div>
+          <div>
+            <Label htmlFor="extra_guest_fee">Phụ thu / khách vượt chuẩn</Label>
+            <Input
+              id="extra_guest_fee"
+              type="number"
+              min={0}
+              value={form.extra_guest_fee ?? ""}
+              onChange={(e) => set("extra_guest_fee", e.target.value ? Number(e.target.value) : null)}
+              placeholder="VD: 200000"
+            />
+            <p className="mt-1 text-[11px] text-ink-muted">
+              Không bắt buộc — để trống thì hệ thống ghi "cần xác nhận phụ thu", không tự đoán giá.
+            </p>
           </div>
         </div>
       </Card>

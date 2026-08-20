@@ -1,6 +1,7 @@
 import { Holiday, Product, RankedProduct, SearchFilters } from "./types";
 import { resolveProductPricing } from "./pricing";
 import { formatVND } from "./format";
+import { getSearchCapacity } from "./capacity";
 
 export function normalize(str: string): string {
   return str
@@ -60,7 +61,14 @@ export function applyHardFilters(products: Product[], filters: SearchFilters): P
   }
 
   if (filters.guests) {
-    result = result.filter((p) => p.max_guests != null && p.max_guests >= filters.guests!);
+    // Dùng ngưỡng "sức chứa search" (max_guests thực tế nếu có, không thì tự
+    // suy ra +80% từ số khách tiêu chuẩn) — KHÔNG loại villa chỉ vì Admin
+    // chưa nhập max_guests. Villa hoàn toàn không có standard_guests lẫn
+    // max_guests thì không có căn cứ nào để xác nhận đủ chỗ -> loại.
+    result = result.filter((p) => {
+      const capacity = getSearchCapacity(p);
+      return capacity != null && capacity >= filters.guests!;
+    });
   }
 
   return result;
@@ -122,11 +130,13 @@ export function scoreProduct(product: Product, filters: SearchFilters, rankingPr
     if (amenityMatches(product, key)) score += W_AMENITY_EACH;
   });
 
-  // 4. Sức chứa vừa vặn (đã đảm bảo đủ từ hard filter) — dư ít quá mức cần
-  // vẫn tốt hơn dư quá nhiều (phòng quá to so với nhu cầu thực).
-  if (filters.guests && product.max_guests != null) {
-    const overshoot = product.max_guests - filters.guests;
-    score += Math.max(0, W_CAPACITY_FIT * (1 - Math.min(overshoot / filters.guests, 1) * 0.6));
+  // 4. Số khách tiêu chuẩn CÀNG GẦN nhu cầu càng ưu tiên (không phải max_guests
+  // — đã đảm bảo đủ chỗ từ hard filter rồi). VD tìm 20 khách: căn tiêu chuẩn
+  // 20 xếp trên căn tiêu chuẩn 18, xếp trên căn tiêu chuẩn 15 (dù cả 3 đều
+  // hiện ra vì nằm trong ngưỡng search mở rộng).
+  if (filters.guests && product.standard_guests != null) {
+    const diff = Math.abs(product.standard_guests - filters.guests);
+    score += Math.max(0, W_CAPACITY_FIT * (1 - Math.min(diff / filters.guests, 1)));
   }
 
   // 5. Số phòng ngủ phù hợp
@@ -178,8 +188,13 @@ export function buildMatchReason(
     );
   }
 
-  if (filters.guests && product.max_guests != null) {
-    parts.push(`Chứa đủ ${filters.guests} khách`);
+  if (filters.guests && product.standard_guests != null) {
+    if (product.standard_guests >= filters.guests) {
+      parts.push(`Đủ chỗ cho ${filters.guests} khách`);
+    } else {
+      const extra = filters.guests - product.standard_guests;
+      parts.push(`${product.standard_guests} khách tiêu chuẩn, +${extra} khách vượt chuẩn`);
+    }
   }
 
   return parts.slice(0, 3).join(" • ") || "Phù hợp với tiêu chí tìm kiếm";

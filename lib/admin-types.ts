@@ -11,6 +11,7 @@ export interface ProductInput {
   beds?: number | null;
   standard_guests?: number | null;
   max_guests?: number | null;
+  extra_guest_fee?: number | null;
   /** Hotel: giá phòng thấp nhất (nhập tay). Villa/resort: = price_weekday, set tự động khi lưu. */
   price?: number | null;
   price_weekday?: number | null;

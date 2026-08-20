@@ -60,6 +60,7 @@ export function SearchExperience({
 
   const [query, setQuery] = useState(saved?.query ?? "");
   const [filters, setFilters] = useState<SearchFilters>(saved?.filters ?? {});
+  const [resolvedFilters, setResolvedFilters] = useState<SearchFilters>(saved?.filters ?? {});
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
 
   const [results, setResults] = useState<RankedProduct[]>(saved?.results ?? []);
@@ -139,6 +140,7 @@ export function SearchExperience({
         setLastQuery(opts.query);
         setHasSearched(true);
         setSuggestedRegions(nextSuggested);
+        setResolvedFilters(data.parsedFilters);
         persist({
           query: opts.query,
           filters: opts.filters,
@@ -349,6 +351,7 @@ export function SearchExperience({
                     rank={(i + 1) as 1 | 2 | 3}
                     matchLabel={i === 0 ? "Phù hợp nhất" : `Lựa chọn ${i + 1}`}
                     reason={product._reason}
+                    requestedGuests={resolvedFilters.guests}
                   />
                 ))}
               </div>
@@ -365,7 +368,7 @@ export function SearchExperience({
               <p className="mb-2.5 text-[13px] text-ink-muted">
                 Đang hiển thị {results.length} / {total} sản phẩm phù hợp nhất
               </p>
-              <ProductGrid products={rest} />
+              <ProductGrid products={rest} requestedGuests={resolvedFilters.guests} />
             </div>
           )}
 

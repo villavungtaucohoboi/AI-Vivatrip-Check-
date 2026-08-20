@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { BedDouble, MapPin, Users, Waves, Music2, Flame, Home, Droplet, Dumbbell, Eye } from "lucide-react";
+import { BedDouble, MapPin, Users, Waves, Music2, Flame, Home, Droplet, Dumbbell, Eye, AlertTriangle } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ProductImage } from "@/components/product-image";
 import { formatVND, formatVNDShort } from "@/lib/format";
 import { formatDateVN, formatDiscount, TIER_LABEL_SHORT } from "@/lib/pricing";
+import { calcGuestPricing } from "@/lib/capacity";
 import { PRODUCT_TYPE_LABEL, type DatePricingContext, type Product } from "@/lib/types";
 
 const AMENITY_ICONS = [
@@ -17,7 +18,7 @@ const AMENITY_ICONS = [
   { key: "pickleball" as const, label: "Pickleball", Icon: Dumbbell },
 ];
 
-function PriceBlock({ product }: { product: Product & { _pricing?: DatePricingContext } }) {
+function PriceBlock({ product, requestedGuests }: { product: Product & { _pricing?: DatePricingContext }; requestedGuests?: number }) {
   if (product.type === "hotel") {
     return (
       <div>
@@ -34,18 +35,32 @@ function PriceBlock({ product }: { product: Product & { _pricing?: DatePricingCo
   // Có ngày cụ thể — hiển thị đúng 1 giá của ngày đó, không hiện giá weekday
   if (ctx && ctx.basePrice != null) {
     const hasDiscount = ctx.discountValue > 0 && ctx.finalPrice != null;
+    const dayPrice = hasDiscount ? ctx.finalPrice! : ctx.basePrice;
+    const guestPricing = requestedGuests ? calcGuestPricing(product, requestedGuests, dayPrice) : null;
+
     return (
       <div>
         {hasDiscount && (
           <p className="text-[10px] lg:text-[11px] text-ink-muted line-through">{formatVND(ctx.basePrice)}</p>
         )}
         <p className="text-[14px] lg:text-[19px] font-bold leading-none tracking-tight text-teal-dark">
-          {formatVND(hasDiscount ? ctx.finalPrice : ctx.basePrice)}
+          {guestPricing?.totalPrice != null ? formatVND(guestPricing.totalPrice) : formatVND(dayPrice)}
         </p>
         <p className="mt-1 text-[10px] lg:text-[11px] text-ink-muted">
           {TIER_LABEL_SHORT[ctx.tier]} · {formatDateVN(ctx.date)}
           {hasDiscount && ` · CK ${formatDiscount(ctx.discountType, ctx.discountValue)}`}
         </p>
+        {guestPricing?.isOverStandard && guestPricing.totalPrice != null && (
+          <p className="mt-0.5 text-[9.5px] lg:text-[10.5px] text-ink-muted">
+            Giá gốc {formatVND(dayPrice)} + {guestPricing.extraGuests} khách × {formatVND(guestPricing.extraFeePerGuest!)}
+          </p>
+        )}
+        {guestPricing?.isOverStandard && guestPricing.totalPrice == null && (
+          <p className="mt-0.5 flex items-center gap-1 text-[9.5px] lg:text-[10.5px] font-medium text-sand">
+            <AlertTriangle className="h-3 w-3 shrink-0" />
+            Cần xác nhận phụ thu khách vượt tiêu chuẩn
+          </p>
+        )}
       </div>
     );
   }
@@ -65,6 +80,12 @@ function PriceBlock({ product }: { product: Product & { _pricing?: DatePricingCo
         <span className="font-semibold text-ink">{TIER_LABEL_SHORT.saturday_holiday}</span>{" "}
         {formatVNDShort(product.price_saturday_holiday)}
       </p>
+      {requestedGuests && product.standard_guests != null && requestedGuests > product.standard_guests && (
+        <p className="mt-0.5 flex items-center gap-1 font-medium text-sand">
+          <AlertTriangle className="h-3 w-3 shrink-0" />
+          Cần xác nhận phụ thu khách vượt tiêu chuẩn
+        </p>
+      )}
     </div>
   );
 }
@@ -74,6 +95,7 @@ export function ProductCard({
   matchLabel,
   rank,
   reason,
+  requestedGuests,
 }: {
   product: Product & { _pricing?: DatePricingContext; _reason?: string };
   /** VD: "Phù hợp nhất" — chỉ nên truyền cho kết quả #1 của một tìm kiếm có nội dung */
@@ -81,6 +103,8 @@ export function ProductCard({
   /** 1, 2, 3 — hiện huy chương 🥇🥈🥉 cho Top 3 "phù hợp nhất" */
   rank?: 1 | 2 | 3;
   reason?: string;
+  /** Số khách Sale đang tìm — dùng để hiện badge "+N khách vượt chuẩn" và tính phụ thu nếu có */
+  requestedGuests?: number;
 }) {
   const amenities = AMENITY_ICONS.filter(({ key }) => product[key]).slice(0, 2);
   const detailHref = product._pricing?.date
@@ -131,10 +155,15 @@ export function ProductCard({
                 {product.bedrooms} PN
               </span>
             )}
-            {product.max_guests != null && (
+            {product.standard_guests != null && (
               <span className="flex items-center gap-1">
                 <Users className="h-3 w-3 lg:h-3.5 lg:w-3.5" />
-                {product.max_guests} khách
+                {product.standard_guests} khách tiêu chuẩn
+                {requestedGuests != null && requestedGuests > product.standard_guests && (
+                  <span className="ml-0.5 rounded-full bg-sand-light px-1.5 py-0.5 text-[9px] font-semibold text-[#7A5F2B] lg:text-[10px]">
+                    +{requestedGuests - product.standard_guests} khách
+                  </span>
+                )}
               </span>
             )}
             {amenities.map(({ key, label, Icon }) => (
@@ -150,7 +179,7 @@ export function ProductCard({
           )}
 
           <div className="mt-auto flex items-end justify-between pt-1 lg:pt-1.5">
-            <PriceBlock product={product} />
+            <PriceBlock product={product} requestedGuests={requestedGuests} />
             <span className="hidden shrink-0 rounded-lg border border-border px-2.5 py-1.5 text-[12px] font-medium text-ink-muted group-hover:bg-paper-dim lg:block">
               Xem chi tiết
             </span>
