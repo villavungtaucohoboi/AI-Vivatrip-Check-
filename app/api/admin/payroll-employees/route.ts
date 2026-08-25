@@ -10,6 +10,9 @@ export async function POST(req: NextRequest) {
     position?: string;
     department_id?: string;
     salary_scheme_id?: string;
+    base_salary?: number;
+    default_allowance?: number;
+    default_insurance?: number;
   } = await req.json();
 
   if (!body.employee_code?.trim() || !body.full_name?.trim()) {
@@ -37,6 +40,9 @@ export async function POST(req: NextRequest) {
       salary_scheme_id: body.salary_scheme_id || null,
       password_hash: passwordHash,
       must_change_password: true,
+      base_salary: body.base_salary ?? 0,
+      default_allowance: body.default_allowance ?? 0,
+      default_insurance: body.default_insurance ?? 0,
     })
     .select("id")
     .single();

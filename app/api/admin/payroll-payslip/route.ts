@@ -9,7 +9,16 @@ interface InputItem {
 }
 
 export async function POST(req: NextRequest) {
-  const body: { period_id: string; employee_id: string; inputs: InputItem[]; actor?: string } = await req.json();
+  const body: {
+    period_id: string;
+    employee_id: string;
+    inputs: InputItem[];
+    base_salary?: number;
+    allowance?: number;
+    insurance?: number;
+    update_defaults?: boolean;
+    actor?: string;
+  } = await req.json();
   if (!body.period_id || !body.employee_id) {
     return NextResponse.json({ error: "Thiếu kỳ lương hoặc nhân viên." }, { status: 400 });
   }
@@ -24,7 +33,7 @@ export async function POST(req: NextRequest) {
 
   const { data: employee } = await supabase
     .from("employees")
-    .select("id, full_name, salary_scheme_id")
+    .select("id, full_name, salary_scheme_id, base_salary, default_allowance, default_insurance")
     .eq("id", body.employee_id)
     .maybeSingle();
   if (!employee) return NextResponse.json({ error: "Không tìm thấy nhân viên." }, { status: 404 });
@@ -59,6 +68,29 @@ export async function POST(req: NextRequest) {
     sort_order: number;
   }[] = [];
 
+  // ---- Lương cố định / Phụ cấp / Bảo hiểm — thuộc về NHÂN VIÊN, không còn
+  // là khoản trong cơ chế. Không gửi lên (undefined) thì lấy đúng mức mặc
+  // định hiện tại của nhân viên — đây là cách kỳ mới "tự nhảy" lương cố định.
+  const baseSalary = body.base_salary ?? employee.base_salary ?? 0;
+  const allowance = body.allowance ?? employee.default_allowance ?? 0;
+  const insurance = body.insurance ?? employee.default_insurance ?? 0;
+
+  totalIncome += baseSalary + allowance;
+  totalDeduction += Math.abs(insurance);
+
+  items.push(
+    { component_name: "Lương cố định", component_type: "income", calculation_type: "fixed", input_value: null, calculated_value: baseSalary, breakdown_json: null, sort_order: -3 },
+    { component_name: "Phụ cấp", component_type: "income", calculation_type: "fixed", input_value: null, calculated_value: allowance, breakdown_json: null, sort_order: -2 },
+    { component_name: "Bảo hiểm", component_type: "deduction", calculation_type: "manual", input_value: null, calculated_value: -Math.abs(insurance), breakdown_json: null, sort_order: -1 }
+  );
+
+  if (body.update_defaults) {
+    await supabase
+      .from("employees")
+      .update({ base_salary: baseSalary, default_allowance: allowance, default_insurance: insurance })
+      .eq("id", employee.id);
+  }
+
   for (const comp of components ?? []) {
     const input = inputMap.get(comp.id);
     let value = 0;
@@ -66,11 +98,7 @@ export async function POST(req: NextRequest) {
     let inputValueRecord: Record<string, unknown> | null = null;
 
     if (comp.calculation_type === "fixed") {
-      const schemeDefault = comp.config_json?.amount ?? 0;
-      value = input?.manual_amount ?? schemeDefault;
-      if (value !== schemeDefault) {
-        inputValueRecord = { manual_amount: value, scheme_default: schemeDefault };
-      }
+      value = comp.config_json?.amount ?? 0;
     } else if (comp.calculation_type === "manual") {
       value = input?.manual_amount ?? 0;
       inputValueRecord = { manual_amount: value };

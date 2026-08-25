@@ -9,6 +9,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     department_id?: string | null;
     salary_scheme_id?: string | null;
     is_active?: boolean;
+    base_salary?: number;
+    default_allowance?: number;
+    default_insurance?: number;
   } = await req.json();
 
   const payload: Record<string, unknown> = {};
@@ -17,6 +20,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (body.department_id !== undefined) payload.department_id = body.department_id || null;
   if (body.salary_scheme_id !== undefined) payload.salary_scheme_id = body.salary_scheme_id || null;
   if (body.is_active !== undefined) payload.is_active = body.is_active;
+  if (body.base_salary !== undefined) payload.base_salary = body.base_salary;
+  if (body.default_allowance !== undefined) payload.default_allowance = body.default_allowance;
+  if (body.default_insurance !== undefined) payload.default_insurance = body.default_insurance;
 
   const supabase = createServiceClient();
   const { error } = await supabase.from("employees").update(payload).eq("id", id);
