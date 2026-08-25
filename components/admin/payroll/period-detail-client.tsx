@@ -174,6 +174,10 @@ function SalaryEditorModal({
       if (comp.calculation_type === "percentage_tiered") initial[comp.id] = existing?.input_value?.revenue ?? 0;
       else if (comp.calculation_type === "quantity_rate") initial[comp.id] = existing?.input_value?.qty ?? 0;
       else if (comp.calculation_type === "manual") initial[comp.id] = existing?.input_value?.manual_amount ?? 0;
+      // Lương cố định: mặc định lấy theo cơ chế, nhưng nếu tháng trước đã từng
+      // sửa riêng cho người này thì nhớ lại đúng số đã sửa (không phải mặc định).
+      else if (comp.calculation_type === "fixed")
+        initial[comp.id] = existing?.input_value?.manual_amount ?? comp.config_json.amount ?? 0;
     }
     return initial;
   });
@@ -186,7 +190,7 @@ function SalaryEditorModal({
       let value = 0;
       let sub = "";
       if (comp.calculation_type === "fixed") {
-        value = comp.config_json.amount ?? 0;
+        value = inputs[comp.id] ?? comp.config_json.amount ?? 0;
       } else if (comp.calculation_type === "manual") {
         value = inputs[comp.id] ?? 0;
       } else if (comp.calculation_type === "percentage_tiered") {
@@ -211,13 +215,11 @@ function SalaryEditorModal({
       body: JSON.stringify({
         period_id: period.id,
         employee_id: employee.id,
-        inputs: components
-          .filter((c) => c.calculation_type !== "fixed")
-          .map((c) => ({
-            component_id: c.id,
-            input_value: c.calculation_type !== "manual" ? inputs[c.id] ?? 0 : undefined,
-            manual_amount: c.calculation_type === "manual" ? inputs[c.id] ?? 0 : undefined,
-          })),
+        inputs: components.map((c) => ({
+          component_id: c.id,
+          input_value: c.calculation_type === "percentage_tiered" || c.calculation_type === "quantity_rate" ? inputs[c.id] ?? 0 : undefined,
+          manual_amount: c.calculation_type === "manual" || c.calculation_type === "fixed" ? inputs[c.id] ?? 0 : undefined,
+        })),
       }),
     });
     const result = await res.json();
@@ -230,10 +232,17 @@ function SalaryEditorModal({
     onSaved(result.payslipId, result.netPay);
   }
 
+  const groups: { title: string; filter: (c: SalaryComponent) => boolean }[] = [
+    { title: "LƯƠNG CỐ ĐỊNH — sửa riêng cho tháng này", filter: (c) => c.calculation_type === "fixed" },
+    { title: "HOA HỒNG (nhập doanh số, tự tính theo bậc)", filter: (c) => c.calculation_type === "percentage_tiered" },
+    { title: "THƯỞNG / KHOẢN KHÁC", filter: (c) => c.component_type === "income" && (c.calculation_type === "quantity_rate" || c.calculation_type === "manual") },
+    { title: "KHẤU TRỪ", filter: (c) => c.component_type === "deduction" },
+  ];
+
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/45 sm:items-center">
-      <div className="max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-paper sm:rounded-2xl">
-        <div className="sticky top-0 flex items-center justify-between bg-paper px-5 py-4">
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-paper sm:rounded-2xl">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-paper px-5 py-4">
           <p className="text-[15px] font-bold text-ink">
             {employee.employee_code} — {employee.full_name}
           </p>
@@ -241,43 +250,72 @@ function SalaryEditorModal({
         </div>
 
         {isLocked && (
-          <div className="mx-5 mb-3 rounded-xl bg-danger-light px-3.5 py-2.5 text-[12px] text-danger">
+          <div className="mx-5 mt-4 rounded-xl bg-danger-light px-3.5 py-2.5 text-[12px] text-danger">
             Kỳ lương đã khoá — mở khoá trước khi sửa.
           </div>
         )}
 
-        <div className="mx-5 mb-4 rounded-2xl bg-teal-light p-4 text-center">
-          <p className="text-[22px] font-extrabold text-teal-dark">{formatVND(preview.net)}</p>
-          <p className="text-[11px] text-teal-dark opacity-80">THỰC LĨNH (xem trước)</p>
+        <div className="sticky top-[57px] z-10 mx-5 mt-4 rounded-2xl bg-teal-light p-4 text-center">
+          <p className="text-[24px] font-extrabold text-teal-dark">{formatVND(preview.net)}</p>
+          <p className="text-[11px] text-teal-dark opacity-80">THỰC LĨNH — tự cập nhật khi bạn sửa số bên dưới</p>
         </div>
 
-        <div className="space-y-2 px-5 pb-6">
-          {preview.rows.map(({ comp, value, sub }) => (
-            <div key={comp.id} className="flex items-center justify-between gap-3 rounded-xl border border-border bg-white p-3">
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[12.5px] font-semibold text-ink">{comp.name}</p>
-                {sub && <p className="text-[10.5px] text-ink-muted">{sub}</p>}
-                <p className={`text-[12.5px] font-bold ${comp.component_type === "deduction" ? "text-danger" : "text-teal-dark"}`}>
-                  {comp.component_type === "deduction" ? "-" : ""}{formatVND(Math.abs(value))}
-                </p>
+        <div className="space-y-5 px-5 pb-6 pt-5">
+          {groups.map((group) => {
+            const groupRows = preview.rows.filter((r) => group.filter(r.comp));
+            if (groupRows.length === 0) return null;
+            return (
+              <div key={group.title}>
+                <p className="mb-2 text-[11px] font-bold tracking-wide text-ink-muted">{group.title}</p>
+                <div className="space-y-2">
+                  {groupRows.map(({ comp, value, sub }) => {
+                    const isFixed = comp.calculation_type === "fixed";
+                    const schemeDefault = comp.config_json.amount ?? 0;
+                    const overridden = isFixed && (inputs[comp.id] ?? 0) !== schemeDefault;
+                    return (
+                      <div key={comp.id} className="rounded-xl border border-border bg-white p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-[12.5px] font-semibold text-ink">{comp.name}</p>
+                          <p className={`text-[13px] font-bold ${comp.component_type === "deduction" ? "text-danger" : "text-teal-dark"}`}>
+                            {comp.component_type === "deduction" ? "-" : ""}
+                            {formatVND(Math.abs(value))}
+                          </p>
+                        </div>
+                        {sub && <p className="mt-0.5 text-[10.5px] text-ink-muted">{sub}</p>}
+                        <div className="mt-2 flex items-center gap-2">
+                          <input
+                            type="number"
+                            disabled={isLocked}
+                            value={inputs[comp.id] ?? 0}
+                            onChange={(e) => setInputs((prev) => ({ ...prev, [comp.id]: Number(e.target.value) }))}
+                            placeholder={
+                              comp.calculation_type === "percentage_tiered"
+                                ? "Nhập doanh số"
+                                : comp.calculation_type === "quantity_rate"
+                                ? "Nhập số lượng"
+                                : "Nhập số tiền"
+                            }
+                            className="h-10 w-full rounded-lg border border-border px-3 text-[13px] disabled:bg-paper-dim"
+                          />
+                        </div>
+                        {isFixed && (
+                          <p className="mt-1 text-[10.5px] text-ink-muted">
+                            Mặc định theo cơ chế: {formatVND(schemeDefault)}
+                            {overridden && <span className="ml-1 font-semibold text-sand">— đã sửa riêng cho tháng này</span>}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-              {comp.calculation_type !== "fixed" && (
-                <input
-                  type="number"
-                  disabled={isLocked}
-                  value={inputs[comp.id] ?? 0}
-                  onChange={(e) => setInputs((prev) => ({ ...prev, [comp.id]: Number(e.target.value) }))}
-                  placeholder={comp.calculation_type === "percentage_tiered" ? "Doanh số" : comp.calculation_type === "quantity_rate" ? "Số lượng" : "Số tiền"}
-                  className="h-9 w-32 rounded-lg border border-border px-2.5 text-right text-[12.5px] disabled:bg-paper-dim"
-                />
-              )}
-            </div>
-          ))}
+            );
+          })}
 
           <button
             onClick={handleSave}
             disabled={saving || isLocked}
-            className="mt-3 w-full rounded-xl bg-teal py-3 text-[13.5px] font-bold text-white hover:bg-teal-dark disabled:opacity-50"
+            className="w-full rounded-xl bg-teal py-3.5 text-[13.5px] font-bold text-white hover:bg-teal-dark disabled:opacity-50"
           >
             {saving ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : "Lưu bảng lương"}
           </button>
