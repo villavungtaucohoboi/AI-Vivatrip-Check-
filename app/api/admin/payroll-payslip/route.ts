@@ -66,7 +66,11 @@ export async function POST(req: NextRequest) {
     let inputValueRecord: Record<string, unknown> | null = null;
 
     if (comp.calculation_type === "fixed") {
-      value = comp.config_json?.amount ?? 0;
+      const schemeDefault = comp.config_json?.amount ?? 0;
+      value = input?.manual_amount ?? schemeDefault;
+      if (value !== schemeDefault) {
+        inputValueRecord = { manual_amount: value, scheme_default: schemeDefault };
+      }
     } else if (comp.calculation_type === "manual") {
       value = input?.manual_amount ?? 0;
       inputValueRecord = { manual_amount: value };
