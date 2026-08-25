@@ -19,6 +19,7 @@ interface PayslipItemRow {
   payslip_id: string;
   component_name: string;
   input_value: { revenue?: number; qty?: number; manual_amount?: number } | null;
+  calculated_value: number;
 }
 
 export function PeriodDetailClient({
