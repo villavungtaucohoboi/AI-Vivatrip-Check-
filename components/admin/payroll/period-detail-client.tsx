@@ -167,6 +167,19 @@ function SalaryEditorModal({
 }) {
   const components = allComponents.filter((c) => c.scheme_id === employee.salary_scheme_id);
 
+  // Lương cố định / Phụ cấp / Bảo hiểm KHÔNG còn là component trong cơ chế —
+  // chúng thuộc về nhân viên. Nếu kỳ này đã từng lưu payslip trước đó, lấy
+  // đúng số đã lưu; nếu chưa (kỳ mới), tự nhảy theo mức mặc định hiện tại
+  // của nhân viên (employee.base_salary / default_allowance / default_insurance).
+  const existingBase = existingItems.find((i) => i.component_name === "Lương cố định");
+  const existingAllowance = existingItems.find((i) => i.component_name === "Phụ cấp");
+  const existingInsurance = existingItems.find((i) => i.component_name === "Bảo hiểm");
+
+  const [baseSalary, setBaseSalary] = useState(existingBase?.calculated_value ?? employee.base_salary ?? 0);
+  const [allowance, setAllowance] = useState(existingAllowance?.calculated_value ?? employee.default_allowance ?? 0);
+  const [insurance, setInsurance] = useState(Math.abs(existingInsurance?.calculated_value ?? employee.default_insurance ?? 0));
+  const [updateDefaults, setUpdateDefaults] = useState(false);
+
   const [inputs, setInputs] = useState<Record<string, number>>(() => {
     const initial: Record<string, number> = {};
     for (const comp of components) {
@@ -174,23 +187,19 @@ function SalaryEditorModal({
       if (comp.calculation_type === "percentage_tiered") initial[comp.id] = existing?.input_value?.revenue ?? 0;
       else if (comp.calculation_type === "quantity_rate") initial[comp.id] = existing?.input_value?.qty ?? 0;
       else if (comp.calculation_type === "manual") initial[comp.id] = existing?.input_value?.manual_amount ?? 0;
-      // Lương cố định: mặc định lấy theo cơ chế, nhưng nếu tháng trước đã từng
-      // sửa riêng cho người này thì nhớ lại đúng số đã sửa (không phải mặc định).
-      else if (comp.calculation_type === "fixed")
-        initial[comp.id] = existing?.input_value?.manual_amount ?? comp.config_json.amount ?? 0;
     }
     return initial;
   });
   const [saving, setSaving] = useState(false);
 
   const preview = useMemo(() => {
-    let income = 0;
-    let deduction = 0;
+    let income = baseSalary + allowance;
+    let deduction = Math.abs(insurance);
     const rows = components.map((comp) => {
       let value = 0;
       let sub = "";
       if (comp.calculation_type === "fixed") {
-        value = inputs[comp.id] ?? comp.config_json.amount ?? 0;
+        value = comp.config_json.amount ?? 0;
       } else if (comp.calculation_type === "manual") {
         value = inputs[comp.id] ?? 0;
       } else if (comp.calculation_type === "percentage_tiered") {
@@ -205,7 +214,7 @@ function SalaryEditorModal({
       return { comp, value, sub };
     });
     return { rows, income, deduction, net: income - deduction };
-  }, [components, inputs]);
+  }, [components, inputs, baseSalary, allowance, insurance]);
 
   async function handleSave() {
     setSaving(true);
@@ -215,10 +224,14 @@ function SalaryEditorModal({
       body: JSON.stringify({
         period_id: period.id,
         employee_id: employee.id,
+        base_salary: baseSalary,
+        allowance: allowance,
+        insurance: insurance,
+        update_defaults: updateDefaults,
         inputs: components.map((c) => ({
           component_id: c.id,
           input_value: c.calculation_type === "percentage_tiered" || c.calculation_type === "quantity_rate" ? inputs[c.id] ?? 0 : undefined,
-          manual_amount: c.calculation_type === "manual" || c.calculation_type === "fixed" ? inputs[c.id] ?? 0 : undefined,
+          manual_amount: c.calculation_type === "manual" ? inputs[c.id] ?? 0 : undefined,
         })),
       }),
     });
@@ -228,15 +241,19 @@ function SalaryEditorModal({
       toast.error(result.error ?? "Có lỗi xảy ra");
       return;
     }
-    toast.success("Đã lưu bảng lương");
+    toast.success(updateDefaults ? "Đã lưu và cập nhật mức mặc định mới" : "Đã lưu bảng lương");
     onSaved(result.payslipId, result.netPay);
   }
 
+  const isBaseDefault = baseSalary === (employee.base_salary ?? 0);
+  const isAllowanceDefault = allowance === (employee.default_allowance ?? 0);
+  const isInsuranceDefault = insurance === (employee.default_insurance ?? 0);
+  const anyOverridden = !isBaseDefault || !isAllowanceDefault || !isInsuranceDefault;
+
   const groups: { title: string; filter: (c: SalaryComponent) => boolean }[] = [
-    { title: "LƯƠNG CỐ ĐỊNH — sửa riêng cho tháng này", filter: (c) => c.calculation_type === "fixed" },
     { title: "HOA HỒNG (nhập doanh số, tự tính theo bậc)", filter: (c) => c.calculation_type === "percentage_tiered" },
     { title: "THƯỞNG / KHOẢN KHÁC", filter: (c) => c.component_type === "income" && (c.calculation_type === "quantity_rate" || c.calculation_type === "manual") },
-    { title: "KHẤU TRỪ", filter: (c) => c.component_type === "deduction" },
+    { title: "KHẤU TRỪ KHÁC", filter: (c) => c.component_type === "deduction" },
   ];
 
   return (
@@ -261,6 +278,28 @@ function SalaryEditorModal({
         </div>
 
         <div className="space-y-5 px-5 pb-6 pt-5">
+          <div>
+            <p className="mb-2 text-[11px] font-bold tracking-wide text-ink-muted">LƯƠNG CỐ ĐỊNH — riêng cho nhân viên này</p>
+            <div className="space-y-2 rounded-xl border-2 border-teal bg-white p-3">
+              <MoneyField label="Lương cố định" value={baseSalary} onChange={setBaseSalary} disabled={isLocked} />
+              <MoneyField label="Phụ cấp" value={allowance} onChange={setAllowance} disabled={isLocked} />
+              <MoneyField label="Bảo hiểm (khấu trừ)" value={insurance} onChange={setInsurance} disabled={isLocked} deduct />
+              <p className="text-[10.5px] text-ink-muted">
+                Mặc định hiện tại: {formatVND(employee.base_salary)} lương · {formatVND(employee.default_allowance)} phụ cấp · {formatVND(employee.default_insurance)} bảo hiểm
+                {anyOverridden && <span className="ml-1 font-semibold text-sand">— đang sửa riêng cho kỳ này</span>}
+              </p>
+              <label className="flex items-center gap-2 text-[11.5px] text-ink-muted">
+                <input
+                  type="checkbox"
+                  checked={updateDefaults}
+                  onChange={(e) => setUpdateDefaults(e.target.checked)}
+                  className="h-4 w-4"
+                />
+                Cập nhật luôn làm mức mặc định (lương cố định, phụ cấp, bảo hiểm) từ kỳ sau
+              </label>
+            </div>
+          </div>
+
           {groups.map((group) => {
             const groupRows = preview.rows.filter((r) => group.filter(r.comp));
             if (groupRows.length === 0) return null;
@@ -268,45 +307,34 @@ function SalaryEditorModal({
               <div key={group.title}>
                 <p className="mb-2 text-[11px] font-bold tracking-wide text-ink-muted">{group.title}</p>
                 <div className="space-y-2">
-                  {groupRows.map(({ comp, value, sub }) => {
-                    const isFixed = comp.calculation_type === "fixed";
-                    const schemeDefault = comp.config_json.amount ?? 0;
-                    const overridden = isFixed && (inputs[comp.id] ?? 0) !== schemeDefault;
-                    return (
-                      <div key={comp.id} className="rounded-xl border border-border bg-white p-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="text-[12.5px] font-semibold text-ink">{comp.name}</p>
-                          <p className={`text-[13px] font-bold ${comp.component_type === "deduction" ? "text-danger" : "text-teal-dark"}`}>
-                            {comp.component_type === "deduction" ? "-" : ""}
-                            {formatVND(Math.abs(value))}
-                          </p>
-                        </div>
-                        {sub && <p className="mt-0.5 text-[10.5px] text-ink-muted">{sub}</p>}
-                        <div className="mt-2 flex items-center gap-2">
-                          <input
-                            type="number"
-                            disabled={isLocked}
-                            value={inputs[comp.id] ?? 0}
-                            onChange={(e) => setInputs((prev) => ({ ...prev, [comp.id]: Number(e.target.value) }))}
-                            placeholder={
-                              comp.calculation_type === "percentage_tiered"
-                                ? "Nhập doanh số"
-                                : comp.calculation_type === "quantity_rate"
-                                ? "Nhập số lượng"
-                                : "Nhập số tiền"
-                            }
-                            className="h-10 w-full rounded-lg border border-border px-3 text-[13px] disabled:bg-paper-dim"
-                          />
-                        </div>
-                        {isFixed && (
-                          <p className="mt-1 text-[10.5px] text-ink-muted">
-                            Mặc định theo cơ chế: {formatVND(schemeDefault)}
-                            {overridden && <span className="ml-1 font-semibold text-sand">— đã sửa riêng cho tháng này</span>}
-                          </p>
-                        )}
+                  {groupRows.map(({ comp, value, sub }) => (
+                    <div key={comp.id} className="rounded-xl border border-border bg-white p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-[12.5px] font-semibold text-ink">{comp.name}</p>
+                        <p className={`text-[13px] font-bold ${comp.component_type === "deduction" ? "text-danger" : "text-teal-dark"}`}>
+                          {comp.component_type === "deduction" ? "-" : ""}
+                          {formatVND(Math.abs(value))}
+                        </p>
                       </div>
-                    );
-                  })}
+                      {sub && <p className="mt-0.5 text-[10.5px] text-ink-muted">{sub}</p>}
+                      <div className="mt-2 flex items-center gap-2">
+                        <input
+                          type="number"
+                          disabled={isLocked}
+                          value={inputs[comp.id] ?? 0}
+                          onChange={(e) => setInputs((prev) => ({ ...prev, [comp.id]: Number(e.target.value) }))}
+                          placeholder={
+                            comp.calculation_type === "percentage_tiered"
+                              ? "Nhập doanh số"
+                              : comp.calculation_type === "quantity_rate"
+                              ? "Nhập số lượng"
+                              : "Nhập số tiền"
+                          }
+                          className="h-10 w-full rounded-lg border border-border px-3 text-[13px] disabled:bg-paper-dim"
+                        />
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             );
@@ -321,6 +349,40 @@ function SalaryEditorModal({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function MoneyField({
+  label,
+  value,
+  onChange,
+  disabled,
+  deduct,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  disabled?: boolean;
+  deduct?: boolean;
+}) {
+  const [display, setDisplay] = useState(value ? value.toLocaleString("vi-VN") : "");
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-[12.5px] font-semibold text-ink">{label}</span>
+      <input
+        type="text"
+        inputMode="numeric"
+        disabled={disabled}
+        value={display}
+        onChange={(e) => {
+          const digits = e.target.value.replace(/[^\d]/g, "");
+          const num = Number(digits) || 0;
+          setDisplay(digits ? num.toLocaleString("vi-VN") : "");
+          onChange(deduct ? Math.abs(num) : num);
+        }}
+        className="h-10 w-40 rounded-lg border border-border px-3 text-right text-[13px] font-bold disabled:bg-paper-dim"
+      />
     </div>
   );
 }

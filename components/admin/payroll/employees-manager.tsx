@@ -25,6 +25,9 @@ export function EmployeesManager({
   const [position, setPosition] = useState("");
   const [deptId, setDeptId] = useState("");
   const [schemeId, setSchemeId] = useState("");
+  const [baseSalary, setBaseSalary] = useState(0);
+  const [allowance, setAllowance] = useState(0);
+  const [insurance, setInsurance] = useState(0);
   const [saving, setSaving] = useState(false);
   const [revealedPassword, setRevealedPassword] = useState<{ code: string; password: string } | null>(null);
   const [resettingId, setResettingId] = useState<string | null>(null);
@@ -53,6 +56,9 @@ export function EmployeesManager({
           position,
           department_id: deptId || undefined,
           salary_scheme_id: schemeId || undefined,
+          base_salary: baseSalary,
+          default_allowance: allowance,
+          default_insurance: insurance,
         }),
       });
       const result = await res.json();
@@ -69,6 +75,9 @@ export function EmployeesManager({
           salary_scheme_id: schemeId || null,
           must_change_password: true,
           is_active: true,
+          base_salary: baseSalary,
+          default_allowance: allowance,
+          default_insurance: insurance,
         },
       ]);
       setRevealedPassword({ code: code.toUpperCase(), password: result.tempPassword });
@@ -77,6 +86,9 @@ export function EmployeesManager({
       setPosition("");
       setDeptId("");
       setSchemeId("");
+      setBaseSalary(0);
+      setAllowance(0);
+      setInsurance(0);
       toast.success("Đã tạo nhân viên");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Có lỗi xảy ra");
@@ -107,6 +119,16 @@ export function EmployeesManager({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ salary_scheme_id: newSchemeId }),
     });
+  }
+
+  async function handleUpdateDefault(id: string, field: "base_salary" | "default_allowance" | "default_insurance", value: number) {
+    setEmployees((prev) => prev.map((e) => (e.id === id ? { ...e, [field]: value } : e)));
+    await fetch(`/api/admin/payroll-employees/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ [field]: value }),
+    });
+    toast.success("Đã lưu mức mặc định");
   }
 
   return (
@@ -162,6 +184,11 @@ export function EmployeesManager({
               </Select>
             </div>
           </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <MoneyInput label="Lương cố định" value={baseSalary} onChange={setBaseSalary} />
+            <MoneyInput label="Phụ cấp" value={allowance} onChange={setAllowance} />
+            <MoneyInput label="Bảo hiểm" value={insurance} onChange={setInsurance} deduct />
+          </div>
           <Button type="submit" disabled={saving}>
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
             Tạo nhân viên
@@ -171,42 +198,106 @@ export function EmployeesManager({
 
       <div className="divide-y divide-border rounded-2xl border border-border bg-white">
         {employees.map((emp) => (
-          <div key={emp.id} className="flex flex-col gap-2 p-3.5 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-[13.5px] font-bold text-ink">
-                {emp.employee_code} — {emp.full_name}
-                {emp.must_change_password && (
-                  <span className="ml-2 rounded-full bg-sand-light px-2 py-0.5 text-[10px] font-semibold text-[#7A5F2B]">
-                    Chưa đổi MK lần đầu
-                  </span>
-                )}
-              </p>
-              <p className="text-[12px] text-ink-muted">
-                {emp.position ?? "—"} · {deptName(emp.department_id)} · {schemeName(emp.salary_scheme_id)}
-              </p>
+          <div key={emp.id} className="space-y-2.5 p-3.5">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-[13.5px] font-bold text-ink">
+                  {emp.employee_code} — {emp.full_name}
+                  {emp.must_change_password && (
+                    <span className="ml-2 rounded-full bg-sand-light px-2 py-0.5 text-[10px] font-semibold text-[#7A5F2B]">
+                      Chưa đổi MK lần đầu
+                    </span>
+                  )}
+                </p>
+                <p className="text-[12px] text-ink-muted">
+                  {emp.position ?? "—"} · {deptName(emp.department_id)} · {schemeName(emp.salary_scheme_id)}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Select
+                  value={emp.salary_scheme_id ?? ""}
+                  onChange={(e) => handleAssignScheme(emp.id, e.target.value)}
+                  className="w-40 text-[12.5px]"
+                >
+                  <option value="">Chưa gán cơ chế</option>
+                  {schemes.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </Select>
+                <button
+                  onClick={() => handleResetPassword(emp.id, emp.employee_code)}
+                  disabled={resettingId === emp.id}
+                  className="shrink-0 rounded-lg border border-border px-3 py-2 text-[12px] font-semibold text-ink-muted hover:bg-paper-dim"
+                >
+                  {resettingId === emp.id ? "..." : "Reset MK"}
+                </button>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Select
-                value={emp.salary_scheme_id ?? ""}
-                onChange={(e) => handleAssignScheme(emp.id, e.target.value)}
-                className="w-40 text-[12.5px]"
-              >
-                <option value="">Chưa gán cơ chế</option>
-                {schemes.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </Select>
-              <button
-                onClick={() => handleResetPassword(emp.id, emp.employee_code)}
-                disabled={resettingId === emp.id}
-                className="shrink-0 rounded-lg border border-border px-3 py-2 text-[12px] font-semibold text-ink-muted hover:bg-paper-dim"
-              >
-                {resettingId === emp.id ? "..." : "Reset MK"}
-              </button>
+            <div className="grid grid-cols-3 gap-2 rounded-xl bg-paper-dim p-2.5">
+              <MoneyInput
+                compact
+                label="Lương cố định"
+                value={emp.base_salary}
+                onChange={(v) => handleUpdateDefault(emp.id, "base_salary", v)}
+              />
+              <MoneyInput
+                compact
+                label="Phụ cấp"
+                value={emp.default_allowance}
+                onChange={(v) => handleUpdateDefault(emp.id, "default_allowance", v)}
+              />
+              <MoneyInput
+                compact
+                label="Bảo hiểm"
+                value={emp.default_insurance}
+                onChange={(v) => handleUpdateDefault(emp.id, "default_insurance", v)}
+                deduct
+              />
             </div>
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function MoneyInput({
+  label,
+  value,
+  onChange,
+  deduct,
+  compact,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  deduct?: boolean;
+  compact?: boolean;
+}) {
+  const [display, setDisplay] = useState(value ? value.toLocaleString("vi-VN") : "");
+
+  return (
+    <div>
+      <Label className={compact ? "text-[10.5px]" : undefined}>{label}</Label>
+      <input
+        type="text"
+        inputMode="numeric"
+        value={display}
+        onBlur={(e) => {
+          const digits = e.target.value.replace(/[^\d]/g, "");
+          const num = Number(digits) || 0;
+          setDisplay(digits ? num.toLocaleString("vi-VN") : "");
+          if (num !== value) onChange(num);
+        }}
+        onChange={(e) => {
+          const digits = e.target.value.replace(/[^\d]/g, "");
+          setDisplay(digits ? Number(digits).toLocaleString("vi-VN") : "");
+        }}
+        placeholder="0"
+        className={`w-full rounded-lg border border-border bg-white px-2.5 text-right font-semibold ${
+          compact ? "h-8 text-[12px]" : "h-10 text-[13px]"
+        } ${deduct ? "text-danger" : "text-ink"}`}
+      />
     </div>
   );
 }
