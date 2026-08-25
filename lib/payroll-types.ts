@@ -40,6 +40,9 @@ export interface PayrollEmployee {
   salary_scheme_id: string | null;
   must_change_password: boolean;
   is_active: boolean;
+  base_salary: number;
+  default_allowance: number;
+  default_insurance: number;
 }
 
 export interface PayrollPeriod {
