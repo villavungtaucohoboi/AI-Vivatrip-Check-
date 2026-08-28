@@ -21,6 +21,7 @@ const config: Config = {
         sand: {
           DEFAULT: "#C9A15A",
           light: "#F3E9D3",
+          dark: "#7A5F2B",
         },
         border: "#E2DFD5",
         danger: {
