@@ -43,6 +43,8 @@ export interface PayrollEmployee {
   base_salary: number;
   default_allowance: number;
   default_insurance: number;
+  join_date: string | null;
+  date_of_birth: string | null;
 }
 
 export interface PayrollPeriod {

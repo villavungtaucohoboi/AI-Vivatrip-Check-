@@ -56,6 +56,12 @@ export function applyHardFilters(products: Product[], filters: SearchFilters): P
     result = result.filter((p) => wanted.has(normalize(p.area)));
   }
 
+  // Khoá cứng phạm vi loại sản phẩm (trang Tìm Resort/Hotel dùng cái này để
+  // không bao giờ trộn Villa vào, kể cả khi Sale gõ chữ tự do).
+  if (filters.types && filters.types.length > 0) {
+    result = result.filter((p) => filters.types!.includes(p.type));
+  }
+
   if (filters.type) {
     result = result.filter((p) => p.type === filters.type);
   }

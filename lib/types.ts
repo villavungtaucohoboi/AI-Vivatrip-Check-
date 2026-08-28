@@ -33,6 +33,8 @@ export interface Product {
   standard_guests: number | null;
   max_guests: number | null;
   extra_guest_fee: number | null;
+  /** Chỉ có ở hotel/resort — gắn kèm khi search trả kết quả, không phải cột thật trong bảng products */
+  hotel_rates?: HotelRate[];
   /** Villa/resort: = price_weekday (tham khảo/sort khi không có ngày). Hotel: giá phòng thấp nhất, nhập tay. */
   price: number | null;
   /** Villa/resort only — null cho hotel */
@@ -89,11 +91,6 @@ export interface HotelRate {
   updated_at: string;
 }
 
-export interface ProductWithExtras extends Product {
-  product_images?: ProductImage[];
-  hotel_rates?: HotelRate[];
-}
-
 // Bộ lọc dùng chung cho cả tìm kiếm tự nhiên và bộ lọc thủ công
 export interface SearchFilters {
   area?: string;
@@ -101,6 +98,10 @@ export interface SearchFilters {
   subRegion?: string; // tiểu khu vực (VD "Đồng Đò" trong "Sóc Sơn")
   expandRegions?: string[]; // các khu vực Sale đã CHỦ ĐỘNG bấm "xem thêm" — chỉ khi có mới được trộn thêm vào kết quả
   type?: ProductType;
+  /** Khoá cứng phạm vi loại sản phẩm (VD ["hotel","resort"]) — dùng để tách
+   * hẳn trang "Tìm Resort/Hotel" khỏi Villa, không liên quan tới `type` ở
+   * trên (đó là lọc 1 loại cụ thể trong phạm vi đã khoá). */
+  types?: ProductType[];
   guests?: number;
   bedrooms?: number;
   priceFrom?: number;
