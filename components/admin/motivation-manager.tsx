@@ -284,7 +284,7 @@ function QuotesTab({ initial }: { initial: MotivationQuote[] }) {
   return (
     <div className="space-y-4">
       <Card className="p-4">
-        <div className="mb-3 rounded-xl bg-sand-light p-3 text-[12.5px] text-[#5B4A26]">
+        <div className="mb-3 rounded-xl bg-sand-light p-3 text-[12.5px] text-sand-dark">
           Chỉ quote đã tick "Đã xác minh" mới hiện tên tác giả cho Sale — quote chưa xác minh sẽ không hiển
           thị cho tới khi được duyệt, để tránh gán nhầm câu nói cho người khác.
         </div>

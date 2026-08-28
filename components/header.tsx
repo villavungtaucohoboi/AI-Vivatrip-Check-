@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { CalendarClock, Dices, Lock, PartyPopper, Plus, Search, Settings, Wallet } from "lucide-react";
+import { Building2, CalendarClock, Dices, Lock, PartyPopper, Plus, Search, Settings, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useClientRole } from "@/lib/use-client-role";
 import type { UserRole } from "@/lib/types";
@@ -27,7 +27,7 @@ export function Header({ role: initialRole }: { role: UserRole }) {
       href={href}
       className={cn(
         "flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium transition-colors",
-        pathname.startsWith(href)
+        pathname === href || pathname.startsWith(href + "/")
           ? "bg-teal-light text-teal-dark"
           : "text-ink-muted hover:bg-paper-dim hover:text-ink"
       )}
@@ -50,7 +50,8 @@ export function Header({ role: initialRole }: { role: UserRole }) {
         </Link>
 
         <nav className="hidden items-center gap-1.5 sm:flex">
-          {navItem("/search", "Tìm sản phẩm", Search)}
+          {navItem("/search", "Tìm Villa", Search)}
+          {navItem("/search-resort", "Tìm Resort/Hotel", Building2)}
           {navItem("/holiday-funds", "Quỹ ngày lễ", PartyPopper)}
           {navItem("/availability-links", "Link check lịch", CalendarClock)}
           {navItem("/daily-wishes", "Lời chúc", Dices)}

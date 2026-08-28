@@ -30,6 +30,7 @@ export function FilterSheet({
   value,
   onApply,
   onClear,
+  hideTypeFilter,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -37,6 +38,7 @@ export function FilterSheet({
   value: SearchFilters;
   onApply: (filters: SearchFilters) => void;
   onClear: () => void;
+  hideTypeFilter?: boolean;
 }) {
   const [draft, setDraft] = useState<SearchFilters>(value);
   const [subRegions, setSubRegions] = useState<string[]>([]);
@@ -130,23 +132,25 @@ export function FilterSheet({
           </div>
         )}
 
-        <div>
-          <Label htmlFor="f-type">Loại sản phẩm</Label>
-          <Select
-            id="f-type"
-            value={draft.type ?? ""}
-            onChange={(e) =>
-              set("type", (e.target.value || undefined) as SearchFilters["type"])
-            }
-          >
-            <option value="">Tất cả loại</option>
-            {Object.entries(PRODUCT_TYPE_LABEL).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </Select>
-        </div>
+        {!hideTypeFilter && (
+          <div>
+            <Label htmlFor="f-type">Loại sản phẩm</Label>
+            <Select
+              id="f-type"
+              value={draft.type ?? ""}
+              onChange={(e) =>
+                set("type", (e.target.value || undefined) as SearchFilters["type"])
+              }
+            >
+              <option value="">Tất cả loại</option>
+              {Object.entries(PRODUCT_TYPE_LABEL).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </Select>
+          </div>
+        )}
 
         <div>
           <Label htmlFor="f-date">Ngày đi</Label>

@@ -4,6 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import { ProductImage } from "@/components/product-image";
 import { cn } from "@/lib/utils";
+import { useHorizontalScroll } from "@/lib/use-horizontal-scroll";
 
 export function ProductGallery({
   images,
@@ -13,6 +14,7 @@ export function ProductGallery({
   alt: string;
 }) {
   const [active, setActive] = useState(0);
+  const thumbScrollRef = useHorizontalScroll<HTMLDivElement>();
 
   if (images.length === 0) {
     return (
@@ -33,7 +35,7 @@ export function ProductGallery({
         />
       </div>
       {images.length > 1 && (
-        <div className="flex gap-2 overflow-x-auto no-scrollbar">
+        <div ref={thumbScrollRef} className="flex cursor-grab gap-2 overflow-x-auto no-scrollbar">
           {images.map((img, i) => (
             <button
               key={img.image_url + i}

@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { getPosterToken } from "@/lib/holiday-fund-identity";
 import { useClientRole } from "@/lib/use-client-role";
+import { useHorizontalScroll } from "@/lib/use-horizontal-scroll";
 import { EmptyState } from "@/components/empty-state";
 import { PostComposerSheet } from "@/components/holiday-funds/post-composer-sheet";
 import { SummaryView } from "@/components/holiday-funds/summary-view";
@@ -43,6 +44,7 @@ export function HolidayFundsApp({
   const savedSheetStillExists = saved && initialSheets.some((s) => s.id === saved.activeSheetId);
 
   const [sheets, setSheets] = useState(initialSheets);
+  const tabScrollRef = useHorizontalScroll<HTMLDivElement>();
   const [activeSheetId, setActiveSheetId] = useState<string | null>(
     savedSheetStillExists ? saved!.activeSheetId : initialSheets[0]?.id ?? null
   );
@@ -177,7 +179,10 @@ export function HolidayFundsApp({
   return (
     <div>
       {/* Tabs Sheet */}
-      <div className="flex gap-1.5 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div
+        ref={tabScrollRef}
+        className="flex cursor-grab gap-1.5 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
         {sheets.map((s) => (
           <button
             key={s.id}

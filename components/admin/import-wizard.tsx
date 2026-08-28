@@ -110,7 +110,7 @@ export function ImportWizard() {
             <p className="text-ink-muted">Thêm mới</p>
           </div>
           <div className="rounded-xl bg-sand-light p-3">
-            <p className="text-2xl font-display text-[#7A5F2B]">{summary.updated}</p>
+            <p className="text-2xl font-display text-sand-dark">{summary.updated}</p>
             <p className="text-ink-muted">Cập nhật</p>
           </div>
           <div className="rounded-xl bg-danger-light p-3">

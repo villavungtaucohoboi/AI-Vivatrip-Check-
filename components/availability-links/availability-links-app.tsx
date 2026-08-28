@@ -6,6 +6,7 @@ import { Link2, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { useClientRole } from "@/lib/use-client-role";
+import { useHorizontalScroll } from "@/lib/use-horizontal-scroll";
 import { EmptyState } from "@/components/empty-state";
 import { LinkCard } from "@/components/availability-links/link-card";
 import { LinkFormDialog } from "@/components/availability-links/link-form-dialog";
@@ -57,6 +58,7 @@ export function AvailabilityLinksApp({
   const saved = useRef(loadSavedState()).current;
 
   const [regions, setRegions] = useState(initialRegions);
+  const tabScrollRef = useHorizontalScroll<HTMLDivElement>();
   const [category, setCategory] = useState<PropertyCategory>(saved?.category ?? "villa");
   const [activeTab, setActiveTab] = useState<string>(saved?.activeTab ?? ALL_TAB);
   const [links, setLinks] = useState<AvailabilityLink[]>([]);
@@ -225,7 +227,10 @@ export function AvailabilityLinksApp({
         </button>
       </div>
 
-      <div className="flex gap-1.5 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div
+        ref={tabScrollRef}
+        className="flex cursor-grab gap-1.5 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
         <button
           onClick={() => setActiveTab(ALL_TAB)}
           className={`shrink-0 whitespace-nowrap rounded-xl px-4 py-2.5 text-[13.5px] font-semibold ${
@@ -244,7 +249,7 @@ export function AvailabilityLinksApp({
                   ? "bg-sand text-white"
                   : "bg-teal text-white"
                 : r.is_chain
-                ? "border border-sand/50 bg-sand-light text-[#7A5F2B]"
+                ? "border border-sand/50 bg-sand-light text-sand-dark"
                 : "border border-border bg-white text-ink-muted"
             }`}
           >
@@ -266,7 +271,7 @@ export function AvailabilityLinksApp({
       </div>
 
       {activeRegion?.is_chain && (
-        <div className="mt-3 rounded-xl bg-sand-light p-3 text-[12px] text-[#7A5F2B]">
+        <div className="mt-3 rounded-xl bg-sand-light p-3 text-[12px] text-sand-dark">
           🔗 Đây là 1 sheet riêng cho cả hệ thống <b>{activeRegion.name}</b> — không tách theo vùng miền vì
           là chuỗi. Gõ tên tỉnh/thành vào ô tìm kiếm bên dưới để lọc nhanh.
         </div>

@@ -223,7 +223,7 @@ export function MotivationModal({ open, onClose }: { open: boolean; onClose: () 
                 ) : (
                   <div className="mb-4 rounded-[14px] bg-sand-light p-3.5">
                     <p className="mb-1 text-[11.5px] font-bold tracking-wide text-teal-dark">🎯 VIỆC NHỎ TIẾP THEO</p>
-                    <p className="text-[13.5px] font-semibold leading-relaxed text-[#5B4A26]">{card.actionText}</p>
+                    <p className="text-[13.5px] font-semibold leading-relaxed text-sand-dark">{card.actionText}</p>
                   </div>
                 )}
               </div>

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarClock, Dices, PartyPopper, Plus, Search, Settings } from "lucide-react";
+import { Building2, CalendarClock, Dices, PartyPopper, Plus, Search, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useClientRole } from "@/lib/use-client-role";
 import type { UserRole } from "@/lib/types";
@@ -15,7 +15,8 @@ export function BottomNav({ role: initialRole }: { role: UserRole }) {
   if (pathname === "/admin/login" || pathname.startsWith("/payroll")) return null;
 
   const items = [
-    { href: "/search", label: "Tìm sản phẩm", icon: Search },
+    { href: "/search", label: "Tìm Villa", icon: Search },
+    { href: "/search-resort", label: "Resort/Hotel", icon: Building2 },
     { href: "/holiday-funds", label: "Quỹ ngày lễ", icon: PartyPopper },
     { href: "/availability-links", label: "Link lịch", icon: CalendarClock },
     { href: "/daily-wishes", label: "Lời chúc", icon: Dices },
@@ -42,7 +43,7 @@ export function BottomNav({ role: initialRole }: { role: UserRole }) {
           style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}
         >
           {items.map(({ href, label, icon: Icon }) => {
-            const active = pathname.startsWith(href);
+            const active = pathname === href || pathname.startsWith(href + "/");
             return (
               <Link
                 key={href}

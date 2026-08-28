@@ -106,7 +106,7 @@ export function FeedView({
             )}
 
             {updated && (
-              <span className="mt-2 inline-block rounded-full bg-sand-light px-2.5 py-0.5 text-[10.5px] font-bold text-[#7A5F2B]">
+              <span className="mt-2 inline-block rounded-full bg-sand-light px-2.5 py-0.5 text-[10.5px] font-bold text-sand-dark">
                 Mới cập nhật · {timeAgo(post.updated_at)}
               </span>
             )}

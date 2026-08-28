@@ -160,7 +160,7 @@ export function ProductCard({
                 <Users className="h-3 w-3 lg:h-3.5 lg:w-3.5" />
                 {product.standard_guests} khách tiêu chuẩn
                 {requestedGuests != null && requestedGuests > product.standard_guests && (
-                  <span className="ml-0.5 rounded-full bg-sand-light px-1.5 py-0.5 text-[9px] font-semibold text-[#7A5F2B] lg:text-[10px]">
+                  <span className="ml-0.5 rounded-full bg-sand-light px-1.5 py-0.5 text-[9px] font-semibold text-sand-dark lg:text-[10px]">
                     +{requestedGuests - product.standard_guests} khách
                   </span>
                 )}

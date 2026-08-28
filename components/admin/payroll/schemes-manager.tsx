@@ -197,7 +197,7 @@ export function SchemesManager({
                   }}
                   className="h-9 flex-1 text-[13px] font-semibold"
                 />
-                <span className={`shrink-0 rounded-md px-2 py-1 text-[10px] font-bold ${comp.calculation_type === "percentage_tiered" ? "bg-teal-light text-teal-dark" : comp.calculation_type === "fixed" ? "bg-sand-light text-[#7A5F2B]" : "bg-paper-dim text-ink-muted"}`}>
+                <span className={`shrink-0 rounded-md px-2 py-1 text-[10px] font-bold ${comp.calculation_type === "percentage_tiered" ? "bg-teal-light text-teal-dark" : comp.calculation_type === "fixed" ? "bg-sand-light text-sand-dark" : "bg-paper-dim text-ink-muted"}`}>
                   {comp.calculation_type === "percentage_tiered" ? "% theo bậc" : comp.calculation_type === "fixed" ? "VNĐ cố định" : comp.calculation_type === "quantity_rate" ? "SL x đơn giá" : "Nhập tay"}
                 </span>
                 <button onClick={() => handleDeleteComponent(scheme.id, comp.id)} className="shrink-0 rounded-lg p-1.5 text-ink-muted hover:bg-danger-light hover:text-danger">

@@ -119,12 +119,17 @@ export function SearchExperience({
       setError(null);
 
       try {
+        // Trang này CHỈ dành cho Villa — khoá cứng phạm vi loại sản phẩm ở
+        // đúng 1 chỗ duy nhất (điểm gửi request), áp dụng cho mọi cách tìm
+        // (gõ chữ, Bộ lọc, hay bấm "Xem thêm khu vực").
+        const lockedFilters: SearchFilters = { ...opts.filters, types: ["villa"] };
+
         const res = await fetch("/api/search", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             query: opts.query,
-            filters: opts.filters,
+            filters: lockedFilters,
             offset: opts.offset,
             limit: PAGE_SIZE,
           }),
@@ -245,7 +250,7 @@ export function SearchExperience({
           onOpenFilters={() => setFilterSheetOpen(true)}
           activeFilterCount={activeFilterCount}
         />
-        <FilterBar areas={areas} value={filters} onApply={handleApplyFilters} />
+        <FilterBar areas={areas} value={filters} onApply={handleApplyFilters} hideTypeFilter />
 
         {!hasSearched && (
           <div className="flex flex-wrap items-center gap-1.5">
@@ -291,6 +296,7 @@ export function SearchExperience({
         value={filters}
         onApply={handleApplyFilters}
         onClear={handleClearFilters}
+        hideTypeFilter
       />
 
       {loading && (

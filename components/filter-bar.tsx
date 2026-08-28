@@ -12,10 +12,13 @@ export function FilterBar({
   areas,
   value,
   onApply,
+  hideTypeFilter,
 }: {
   areas: string[];
   value: SearchFilters;
   onApply: (filters: SearchFilters) => void;
+  /** Ẩn ô "Loại sản phẩm" — dùng khi trang đã khoá cứng 1 loại (VD trang Villa), việc chọn ở đây sẽ vô nghĩa hoặc gây nhầm. */
+  hideTypeFilter?: boolean;
 }) {
   const [draft, setDraft] = useState<SearchFilters>(value);
   const [subRegions, setSubRegions] = useState<string[]>([]);
@@ -76,20 +79,22 @@ export function FilterBar({
         </div>
       )}
 
-      <div className="w-40">
-        <Select
-          aria-label="Loại sản phẩm"
-          value={draft.type ?? ""}
-          onChange={(e) => set("type", (e.target.value || undefined) as SearchFilters["type"])}
-        >
-          <option value="">Loại sản phẩm</option>
-          {Object.entries(PRODUCT_TYPE_LABEL).map(([v, label]) => (
-            <option key={v} value={v}>
-              {label}
-            </option>
-          ))}
-        </Select>
-      </div>
+      {!hideTypeFilter && (
+        <div className="w-40">
+          <Select
+            aria-label="Loại sản phẩm"
+            value={draft.type ?? ""}
+            onChange={(e) => set("type", (e.target.value || undefined) as SearchFilters["type"])}
+          >
+            <option value="">Loại sản phẩm</option>
+            {Object.entries(PRODUCT_TYPE_LABEL).map(([v, label]) => (
+              <option key={v} value={v}>
+                {label}
+              </option>
+            ))}
+          </Select>
+        </div>
+      )}
 
       <div className="w-40">
         <Input
