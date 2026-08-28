@@ -3,6 +3,8 @@ import { LogOut, ShieldCheck } from "lucide-react";
 import { getEmployeeIdFromSession } from "@/lib/payroll-auth";
 import { createServiceClient } from "@/lib/supabase/service";
 import { PayslipView } from "@/components/payroll/payslip-view";
+
+export const dynamic = "force-dynamic";
 import { LogoutButton } from "@/components/payroll/logout-button";
 
 export default async function PayrollPage() {

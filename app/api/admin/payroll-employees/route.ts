@@ -13,6 +13,8 @@ export async function POST(req: NextRequest) {
     base_salary?: number;
     default_allowance?: number;
     default_insurance?: number;
+    join_date?: string;
+    date_of_birth?: string;
   } = await req.json();
 
   if (!body.employee_code?.trim() || !body.full_name?.trim()) {
@@ -43,6 +45,8 @@ export async function POST(req: NextRequest) {
       base_salary: body.base_salary ?? 0,
       default_allowance: body.default_allowance ?? 0,
       default_insurance: body.default_insurance ?? 0,
+      join_date: body.join_date || null,
+      date_of_birth: body.date_of_birth || null,
     })
     .select("id")
     .single();

@@ -4,6 +4,8 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { SchemesManager } from "@/components/admin/payroll/schemes-manager";
 import type { Department, SalaryComponent, SalaryScheme } from "@/lib/payroll-types";
 
+export const dynamic = "force-dynamic";
+
 export default async function AdminPayrollSchemesPage() {
   const supabase = createServiceClient();
   const [{ data: schemes }, { data: components }, { data: departments }] = await Promise.all([

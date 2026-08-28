@@ -4,6 +4,10 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { EmployeesManager } from "@/components/admin/payroll/employees-manager";
 import type { Department, PayrollEmployee, SalaryScheme } from "@/lib/payroll-types";
 
+// Trang này luôn cần dữ liệu tươi (nhân viên/lương thay đổi liên tục) và
+// dùng khóa service-role — không được để Next.js "dựng sẵn" lúc build.
+export const dynamic = "force-dynamic";
+
 export default async function AdminPayrollEmployeesPage() {
   const supabase = createServiceClient();
   const [{ data: employees }, { data: departments }, { data: schemes }] = await Promise.all([

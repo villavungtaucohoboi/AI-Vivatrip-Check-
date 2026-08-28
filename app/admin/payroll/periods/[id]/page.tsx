@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { createServiceClient } from "@/lib/supabase/service";
 import { PeriodDetailClient } from "@/components/admin/payroll/period-detail-client";
+
+export const dynamic = "force-dynamic";
 import type { PayrollEmployee, PayrollPeriod, SalaryComponent } from "@/lib/payroll-types";
 
 export default async function AdminPayrollPeriodDetailPage({ params }: { params: Promise<{ id: string }> }) {

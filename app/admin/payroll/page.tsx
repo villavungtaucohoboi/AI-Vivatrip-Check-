@@ -2,6 +2,8 @@ import Link from "next/link";
 import { ArrowLeft, ArrowRight, CalendarDays, LayoutList, Users } from "lucide-react";
 import { createServiceClient } from "@/lib/supabase/service";
 
+export const dynamic = "force-dynamic";
+
 export default async function AdminPayrollHub() {
   const supabase = createServiceClient();
   const [{ count: empCount }, { count: schemeCount }, { data: periods }] = await Promise.all([

@@ -4,6 +4,8 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { CreatePeriodForm } from "@/components/admin/payroll/create-period-form";
 import type { PayrollPeriod } from "@/lib/payroll-types";
 
+export const dynamic = "force-dynamic";
+
 const STATUS_LABEL: Record<string, string> = { draft: "Nháp", calculated: "Đã tính", approved: "Đã duyệt", locked: "Đã khoá" };
 
 export default async function AdminPayrollPeriodsPage() {

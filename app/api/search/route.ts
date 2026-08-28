@@ -17,6 +17,15 @@ const getCachedAllProducts = unstable_cache(
   { revalidate: 15, tags: ["products"] }
 );
 
+const getCachedAllHotelRates = unstable_cache(
+  async () => {
+    const supabase = createPublicClient();
+    return supabase.from("hotel_rates").select("*").order("price").limit(5000);
+  },
+  ["search-all-hotel-rates"],
+  { revalidate: 15, tags: ["products"] }
+);
+
 const getCachedHolidays = unstable_cache(
   async () => {
     const supabase = createPublicClient();
@@ -79,8 +88,17 @@ export async function POST(req: NextRequest) {
   // có 2 pipeline khác nhau (yêu cầu bắt buộc: NL và Filter UI dùng chung engine).
   const mergedFilters = { ...parsedFromQuery, ...explicitFilters };
 
+  // Nếu trang đã khoá cứng phạm vi loại (VD trang Resort/Hotel khoá types),
+  // mà câu chữ tự do lại đoán ra 1 loại KHÔNG nằm trong phạm vi đó (VD gõ
+  // "villa" trên trang Resort) — bỏ phần đoán sai đó đi, không để ra 0 kết
+  // quả một cách khó hiểu.
+  if (mergedFilters.types?.length && mergedFilters.type && !mergedFilters.types.includes(mergedFilters.type)) {
+    delete mergedFilters.type;
+  }
+
   const holidays = await getCachedHolidays();
   const { data, error } = await getCachedAllProducts();
+  const { data: allHotelRates } = await getCachedAllHotelRates();
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -97,6 +115,22 @@ export async function POST(req: NextRequest) {
   }
 
   const page = ranked.slice(offset, offset + limit);
+
+  // Gắn kèm hạng phòng cho các sản phẩm hotel/resort trong trang kết quả —
+  // chỉ cần đúng những sản phẩm đang trả về, không xử lý thừa cho villa.
+  if (allHotelRates && allHotelRates.length > 0) {
+    const ratesByProduct = new Map<string, typeof allHotelRates>();
+    for (const rate of allHotelRates) {
+      const list = ratesByProduct.get(rate.product_id) ?? [];
+      list.push(rate);
+      ratesByProduct.set(rate.product_id, list);
+    }
+    for (const product of page) {
+      if (product.type !== "villa") {
+        product.hotel_rates = ratesByProduct.get(product.id) ?? [];
+      }
+    }
+  }
 
   const responseBody: SearchResponseBody = {
     results: page,
