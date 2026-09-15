@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { Check, Copy, Loader2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,40 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import type { Department, PayrollEmployee, SalaryScheme } from "@/lib/payroll-types";
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const el = document.createElement("textarea");
+      el.value = text;
+      el.style.position = "fixed";
+      el.style.opacity = "0";
+      document.body.appendChild(el);
+      el.focus();
+      el.select();
+      document.execCommand("copy");
+      document.body.removeChild(el);
+    }
+    setCopied(true);
+    toast.success("Đã copy mật khẩu");
+    setTimeout(() => setCopied(false), 1800);
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className="flex shrink-0 items-center gap-1.5 rounded-lg border border-teal/40 bg-white px-3 py-1.5 text-[12px] font-semibold text-teal-dark hover:bg-teal-light"
+    >
+      {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+      {copied ? "Đã copy" : "Copy"}
+    </button>
+  );
+}
 
 export function EmployeesManager({
   initialEmployees,
@@ -125,11 +159,15 @@ export function EmployeesManager({
     <div className="space-y-4">
       {revealedPassword && (
         <div className="rounded-2xl border border-teal/30 bg-teal-light p-4">
-          <p className="text-[13px] font-bold text-teal-dark">
-            Mật khẩu tạm cho {revealedPassword.code}: <span className="font-mono">{revealedPassword.password}</span>
-          </p>
-          <p className="mt-1 text-[11.5px] text-teal-dark">
-            Gửi cho nhân viên qua kênh riêng tư — mật khẩu này chỉ hiện đúng 1 lần. Nhân viên bắt buộc đổi mật khẩu ngay lần đăng nhập đầu.
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-[13px] font-bold text-teal-dark">
+              Mật khẩu tạm cho {revealedPassword.code}: <span className="font-mono">{revealedPassword.password}</span>
+            </p>
+            <CopyButton text={revealedPassword.password} />
+          </div>
+          <p className="mt-1.5 text-[11.5px] text-teal-dark">
+            Gửi cho nhân viên qua kênh riêng tư — mật khẩu này chỉ hiện đúng 1 lần. Nhân viên bắt buộc đổi mật khẩu
+            ngay lần đăng nhập đầu.
           </p>
           <button onClick={() => setRevealedPassword(null)} className="mt-2 text-[11.5px] font-semibold text-teal-dark underline">
             Đã ghi lại, đóng thông báo này
@@ -243,6 +281,7 @@ function EmployeeRow({
   const [resettingId, setResettingId] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState<"soft" | "hard" | null>(null);
+  const [resetPassword, setResetPassword] = useState<string | null>(null);
 
   const isDirty =
     form.base_salary !== emp.base_salary ||
@@ -288,7 +327,7 @@ function EmployeeRow({
       toast.error(result.error ?? "Có lỗi xảy ra");
       return;
     }
-    toast.success(`Mật khẩu tạm mới cho ${emp.employee_code}: ${result.tempPassword}`, { duration: 10000 });
+    setResetPassword(result.tempPassword);
   }
 
   async function handleDelete(mode: "soft" | "hard") {
@@ -350,6 +389,20 @@ function EmployeeRow({
           </button>
         </div>
       </div>
+
+      {resetPassword && (
+        <div className="mt-3 rounded-xl border border-teal/30 bg-teal-light p-3">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-[12.5px] font-bold text-teal-dark">
+              Mật khẩu mới: <span className="font-mono">{resetPassword}</span>
+            </p>
+            <CopyButton text={resetPassword} />
+          </div>
+          <button onClick={() => setResetPassword(null)} className="mt-1.5 text-[11px] font-semibold text-teal-dark underline">
+            Đã ghi lại, đóng thông báo này
+          </button>
+        </div>
+      )}
 
       <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-2">
         <div>
