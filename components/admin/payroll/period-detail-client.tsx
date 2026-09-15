@@ -1,10 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Loader2, Lock, Unlock } from "lucide-react";
+import { Download, Loader2, Lock, Unlock } from "lucide-react";
 import { toast } from "sonner";
 import { calcTieredCommission, calcQuantityRate } from "@/lib/payroll-calc";
 import { formatVND } from "@/lib/format";
+import { downloadPayslipImage } from "@/lib/payslip-image";
 import type { PayrollEmployee, PayrollPeriod, SalaryComponent } from "@/lib/payroll-types";
 
 const STATUS_LABEL: Record<string, string> = { draft: "Nháp", calculated: "Đã tính", approved: "Đã duyệt", locked: "Đã khoá" };
@@ -168,10 +169,6 @@ function SalaryEditorModal({
 }) {
   const components = allComponents.filter((c) => c.scheme_id === employee.salary_scheme_id);
 
-  // Lương cố định / Phụ cấp / Bảo hiểm KHÔNG còn là component trong cơ chế —
-  // chúng thuộc về nhân viên. Nếu kỳ này đã từng lưu payslip trước đó, lấy
-  // đúng số đã lưu; nếu chưa (kỳ mới), tự nhảy theo mức mặc định hiện tại
-  // của nhân viên (employee.base_salary / default_allowance / default_insurance).
   const existingBase = existingItems.find((i) => i.component_name === "Lương cố định");
   const existingAllowance = existingItems.find((i) => i.component_name === "Phụ cấp");
   const existingInsurance = existingItems.find((i) => i.component_name === "Bảo hiểm");
@@ -246,6 +243,26 @@ function SalaryEditorModal({
     onSaved(result.payslipId, result.netPay);
   }
 
+  function handleDownloadImage() {
+    downloadPayslipImage({
+      employeeName: employee.full_name,
+      month: period.month,
+      year: period.year,
+      netPay: preview.net,
+      totalIncome: preview.income,
+      totalDeduction: preview.deduction,
+      incomeItems: [
+        { name: "Lương cố định", value: baseSalary },
+        { name: "Phụ cấp", value: allowance },
+        ...preview.rows.filter((r) => r.comp.component_type === "income").map((r) => ({ name: r.comp.name, value: r.value })),
+      ],
+      deductionItems: [
+        { name: "Bảo hiểm", value: insurance },
+        ...preview.rows.filter((r) => r.comp.component_type === "deduction").map((r) => ({ name: r.comp.name, value: Math.abs(r.value) })),
+      ],
+    });
+  }
+
   const isBaseDefault = baseSalary === (employee.base_salary ?? 0);
   const isAllowanceDefault = allowance === (employee.default_allowance ?? 0);
   const isInsuranceDefault = insurance === (employee.default_insurance ?? 0);
@@ -277,6 +294,15 @@ function SalaryEditorModal({
           <p className="text-[24px] font-extrabold text-teal-dark">{formatVND(preview.net)}</p>
           <p className="text-[11px] text-teal-dark opacity-80">THỰC LĨNH — tự cập nhật khi bạn sửa số bên dưới</p>
         </div>
+
+        <button
+          onClick={handleDownloadImage}
+          className="mx-5 mt-3 flex items-center justify-center gap-2 rounded-xl border border-teal bg-white py-2.5 text-[12.5px] font-bold text-teal-dark hover:bg-teal-light"
+          style={{ width: "calc(100% - 40px)" }}
+        >
+          <Download className="h-3.5 w-3.5" />
+          Tải ảnh phiếu lương cho nhân viên
+        </button>
 
         <div className="space-y-5 px-5 pb-6 pt-5">
           <div>
