@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarDays, Heart, MessageCircle, Plus, Upload, Wallet } from "lucide-react";
+import { CalendarDays, Heart, MessageCircle, Plus, Table2, Upload, Wallet } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
 import { AdminProductTable } from "@/components/admin/admin-product-table";
@@ -21,7 +21,7 @@ export default async function AdminProductsPage() {
             <h1 className="font-display text-2xl text-ink">Quản lý sản phẩm</h1>
             <p className="text-sm text-ink-muted">{products?.length ?? 0} sản phẩm trong kho</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Link href="/admin/holidays">
               <Button variant="outline">
                 <CalendarDays className="h-4 w-4" />
@@ -44,6 +44,12 @@ export default async function AdminProductsPage() {
               <Button variant="outline">
                 <Wallet className="h-4 w-4" />
                 Bảng lương
+              </Button>
+            </Link>
+            <Link href="/admin/bulk">
+              <Button variant="outline">
+                <Table2 className="h-4 w-4" />
+                Thêm/sửa hàng loạt
               </Button>
             </Link>
             <Link href="/admin/products/import">
