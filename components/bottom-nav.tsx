@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, CalendarClock, Dices, PartyPopper, Plus, Search, Settings } from "lucide-react";
+import { Building2, CalendarClock, Dices, PartyPopper, Plus, Search, Settings, Ship } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useClientRole } from "@/lib/use-client-role";
 import type { UserRole } from "@/lib/types";
@@ -17,6 +17,7 @@ export function BottomNav({ role: initialRole }: { role: UserRole }) {
   const items = [
     { href: "/search", label: "Tìm Villa", icon: Search },
     { href: "/search-resort", label: "Resort/Hotel", icon: Building2 },
+    { href: "/cruises", label: "Du thuyền", icon: Ship },
     { href: "/holiday-funds", label: "Quỹ ngày lễ", icon: PartyPopper },
     { href: "/availability-links", label: "Link lịch", icon: CalendarClock },
     { href: "/daily-wishes", label: "Lời chúc", icon: Dices },

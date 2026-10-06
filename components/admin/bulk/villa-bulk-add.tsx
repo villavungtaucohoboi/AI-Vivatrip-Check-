@@ -1,0 +1,483 @@
+"use client";
+
+import { useRef, useState, type ClipboardEvent } from "react";
+import { toast } from "sonner";
+import {
+  CheckCell,
+  Field,
+  NumCell,
+  SelectCell,
+  SimpleInput,
+  SimpleNum,
+  Td,
+  TextCell,
+  Th,
+  parseClipboardTable,
+  parseNum,
+  useUnsavedGuard,
+} from "@/components/admin/bulk/bulk-ui";
+import {
+  DISCOUNT_MODE_OPTIONS,
+  blankDiscount,
+  discountToFields,
+  isDayMode,
+  modeUnit,
+  type DiscountMode,
+  type DiscountState,
+} from "@/lib/bulk-discount";
+import { postJson, uploadProductImages } from "@/lib/bulk-upload";
+import type { ProductInput } from "@/lib/admin-types";
+
+type AmenityKey = "pool" | "near_beach" | "sea_view" | "near_lake" | "karaoke" | "bbq" | "pickleball";
+const AMENITIES: { key: AmenityKey; label: string }[] = [
+  { key: "pool", label: "Hồ bơi" },
+  { key: "near_beach", label: "Sát biển" },
+  { key: "sea_view", label: "View biển" },
+  { key: "near_lake", label: "View hồ" },
+  { key: "karaoke", label: "Karaoke" },
+  { key: "bbq", label: "BBQ" },
+  { key: "pickleball", label: "Pickle" },
+];
+
+interface Img {
+  file: File;
+  url: string;
+}
+
+interface Row {
+  key: number;
+  code: string;
+  name: string;
+  area: string;
+  guests: number | null;
+  p1: number | null;
+  p2: number | null;
+  p3: number | null;
+  disc: DiscountState;
+  amenities: Record<AmenityKey, boolean>;
+  sub_region: string;
+  address: string;
+  bedrooms: number | null;
+  beds: number | null;
+  max_guests: number | null;
+  extra: number | null;
+  map: string;
+  note: string;
+  images: Img[];
+  open: boolean;
+  err: Partial<Record<"code" | "name" | "area" | "p1" | "p2" | "p3", boolean>>;
+  msg: string;
+}
+
+const COLS = 24;
+
+// Thứ tự cột khi dán từ Excel (bắt đầu từ ô đang đặt con trỏ).
+const PASTE_KEYS = ["code", "name", "area", "guests", "p1", "p2", "p3"] as const;
+type PasteKey = (typeof PASTE_KEYS)[number];
+
+function blankRow(key: number): Row {
+  return {
+    key,
+    code: "",
+    name: "",
+    area: "",
+    guests: null,
+    p1: null,
+    p2: null,
+    p3: null,
+    disc: blankDiscount(),
+    amenities: { pool: false, near_beach: false, sea_view: false, near_lake: false, karaoke: false, bbq: false, pickleball: false },
+    sub_region: "",
+    address: "",
+    bedrooms: null,
+    beds: null,
+    max_guests: null,
+    extra: null,
+    map: "",
+    note: "",
+    images: [],
+    open: false,
+    err: {},
+    msg: "",
+  };
+}
+
+function isEmpty(r: Row): boolean {
+  return !r.code && !r.name && !r.area && r.p1 == null && r.p2 == null && r.p3 == null && r.images.length === 0;
+}
+
+function toInput(r: Row): ProductInput {
+  const base: ProductInput = {
+    product_code: r.code.trim(),
+    product_name: r.name.trim(),
+    type: "villa",
+    area: r.area.trim(),
+    sub_region: r.sub_region.trim() || null,
+    address: r.address.trim() || null,
+    bedrooms: r.bedrooms,
+    beds: r.beds,
+    standard_guests: r.guests,
+    max_guests: r.max_guests,
+    extra_guest_fee: r.extra,
+    price: r.p1,
+    price_weekday: r.p1,
+    price_friday_sunday: r.p2,
+    price_saturday_holiday: r.p3,
+    discount_scheme: "uniform",
+    discount_type: "percent",
+    discount_value: 0,
+    discount_weekday_type: "percent",
+    discount_weekday_value: 0,
+    discount_friday_sunday_type: "percent",
+    discount_friday_sunday_value: 0,
+    discount_saturday_holiday_type: "percent",
+    discount_saturday_holiday_value: 0,
+    ...r.amenities,
+    note: r.note.trim() || null,
+    google_maps_url: r.map.trim() || null,
+  };
+  // Chiết khấu người dùng chọn ghi đè lên mặc định ở trên.
+  return { ...base, ...discountToFields(r.disc) };
+}
+
+export function VillaBulkAdd() {
+  const counter = useRef(1);
+  const nextKey = () => counter.current++;
+  const [rows, setRows] = useState<Row[]>(() => [blankRow(nextKey()), blankRow(nextKey()), blankRow(nextKey())]);
+  const [saving, setSaving] = useState(false);
+  const [progress, setProgress] = useState("");
+
+  const filled = rows.filter((r) => !isEmpty(r)).length;
+  useUnsavedGuard(filled > 0);
+
+  function patch(key: number, p: Partial<Row>) {
+    setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...p, msg: "" } : r)));
+  }
+  function patchErr(key: number, field: keyof Row["err"]) {
+    setRows((prev) =>
+      prev.map((r) => {
+        if (r.key !== key || !r.err[field]) return r;
+        const err = { ...r.err };
+        delete err[field];
+        return { ...r, err };
+      })
+    );
+  }
+  function setField<K extends keyof Row>(key: number, field: K, value: Row[K]) {
+    patch(key, { [field]: value } as Partial<Row>);
+    if (field === "code" || field === "name" || field === "area" || field === "p1" || field === "p2" || field === "p3") {
+      patchErr(key, field as keyof Row["err"]);
+    }
+  }
+  function patchDisc(key: number, p: Partial<DiscountState>) {
+    setRows((prev) => prev.map((r) => (r.key === key ? { ...r, disc: { ...r.disc, ...p } } : r)));
+  }
+  function changeMode(r: Row, mode: DiscountMode) {
+    const day = isDayMode(mode);
+    patchDisc(r.key, { mode, d1: mode === "none" ? null : r.disc.d1, d2: day ? r.disc.d2 : null, d3: day ? r.disc.d3 : null });
+  }
+
+  function onPasteTable(e: ClipboardEvent<HTMLTableElement>) {
+    const holder = (e.target as HTMLElement).closest<HTMLElement>("[data-paste]");
+    if (!holder) return;
+    const grid = parseClipboardTable(e);
+    if (!grid) return;
+    e.preventDefault();
+    const startRow = Number(holder.dataset.row);
+    const startCol = PASTE_KEYS.indexOf(holder.dataset.paste as PasteKey);
+    setRows((prev) => {
+      const next = prev.map((r) => ({ ...r }));
+      while (next.length < startRow + grid.length) next.push(blankRow(nextKey()));
+      grid.forEach((cells, ri) => {
+        const row = next[startRow + ri];
+        cells.forEach((val, ci) => {
+          const k = PASTE_KEYS[startCol + ci];
+          if (!k) return;
+          if (k === "code") row.code = val;
+          else if (k === "name") row.name = val;
+          else if (k === "area") row.area = val;
+          else row[k] = parseNum(val);
+          row.msg = "";
+        });
+      });
+      return next;
+    });
+    toast.success(`Đã dán ${grid.length} dòng từ Excel.`);
+  }
+
+  function addImages(key: number, files: FileList | null) {
+    if (!files || files.length === 0) return;
+    const added: Img[] = Array.from(files).map((file) => ({ file, url: URL.createObjectURL(file) }));
+    setRows((prev) => prev.map((r) => (r.key === key ? { ...r, images: [...r.images, ...added] } : r)));
+  }
+  function removeImage(key: number, idx: number) {
+    setRows((prev) =>
+      prev.map((r) => {
+        if (r.key !== key) return r;
+        URL.revokeObjectURL(r.images[idx].url);
+        return { ...r, images: r.images.filter((_, i) => i !== idx) };
+      })
+    );
+  }
+
+  async function saveAll() {
+    const work = rows.filter((r) => !isEmpty(r));
+    if (work.length === 0) {
+      toast.error("Chưa có dòng nào để lưu.");
+      return;
+    }
+
+    // 1) Kiểm tra từng dòng, đánh dấu ô thiếu.
+    const seen = new Set<string>();
+    let invalid = 0;
+    const checked = new Map<number, Partial<Row>>();
+    work.forEach((r) => {
+      const err: Row["err"] = {};
+      if (!r.code.trim()) err.code = true;
+      if (!r.name.trim()) err.name = true;
+      if (!r.area.trim()) err.area = true;
+      if (r.p1 == null) err.p1 = true;
+      if (r.p2 == null) err.p2 = true;
+      if (r.p3 == null) err.p3 = true;
+      let msg = "";
+      const code = r.code.trim().toLowerCase();
+      if (code) {
+        if (seen.has(code)) {
+          err.code = true;
+          msg = "Mã bị trùng với 1 dòng khác trong bảng.";
+        }
+        seen.add(code);
+      }
+      if (Object.keys(err).length) {
+        invalid++;
+        checked.set(r.key, { err, msg: msg || "Thiếu thông tin bắt buộc (ô tô đỏ).", open: r.open });
+      }
+    });
+    if (checked.size) {
+      setRows((prev) => prev.map((r) => (checked.has(r.key) ? { ...r, ...checked.get(r.key)! } : r)));
+    }
+
+    // 2) Lưu lần lượt các dòng hợp lệ (mỗi dòng: tạo sản phẩm -> ảnh).
+    const valid = work.filter((r) => !checked.has(r.key));
+    if (valid.length === 0) {
+      toast.error(`${invalid} dòng còn thiếu thông tin (tô đỏ), điền nốt rồi lưu lại.`);
+      return;
+    }
+
+    setSaving(true);
+    const savedKeys = new Set<number>();
+    const failed = new Map<number, string>();
+    for (let i = 0; i < valid.length; i++) {
+      const r = valid[i];
+      setProgress(`${i + 1}/${valid.length}`);
+      try {
+        const result = await postJson<{ id: string }>("/api/admin/products", { input: toInput(r) });
+        const urls = r.images.length ? await uploadProductImages(result.id, r.images.map((x) => x.file)) : [];
+        if (urls.length) await postJson(`/api/admin/products/${result.id}/images`, { imageUrls: urls });
+        savedKeys.add(r.key);
+      } catch (err) {
+        failed.set(r.key, err instanceof Error ? err.message : "Lỗi không xác định.");
+      }
+    }
+    setProgress("");
+    setSaving(false);
+
+    setRows((prev) => {
+      prev.filter((r) => savedKeys.has(r.key)).forEach((r) => r.images.forEach((im) => URL.revokeObjectURL(im.url)));
+      const left = prev
+        .filter((r) => !savedKeys.has(r.key) && !isEmpty(r))
+        .map((r) => (failed.has(r.key) ? { ...r, msg: failed.get(r.key)!, open: r.open } : r));
+      return left.length ? left : [blankRow(nextKey()), blankRow(nextKey()), blankRow(nextKey())];
+    });
+
+    const remain = invalid + failed.size;
+    if (remain) {
+      toast.error(`Đã lưu ${savedKeys.size} villa. ${remain} dòng chưa lưu được (xem ghi chú đỏ ở từng dòng).`);
+    } else {
+      toast.success(`Đã lưu ${savedKeys.size} villa đầy đủ giá, tiện ích, ảnh chỉ với 1 lần bấm.`);
+    }
+  }
+
+  return (
+    <div className="pb-6">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <button type="button" onClick={() => setRows((p) => [...p, blankRow(nextKey())])} className="h-10 rounded-xl border border-border bg-white px-4 text-[12.5px] font-bold hover:bg-paper-dim">
+          + 1 dòng
+        </button>
+        <button type="button" onClick={() => setRows((p) => [...p, ...Array.from({ length: 5 }, () => blankRow(nextKey()))])} className="h-10 rounded-xl border border-border bg-white px-4 text-[12.5px] font-bold hover:bg-paper-dim">
+          + 5 dòng
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            if (filled === 0 || confirm("Xoá toàn bộ nội dung đang điền trong bảng?")) {
+              setRows([blankRow(nextKey()), blankRow(nextKey()), blankRow(nextKey())]);
+            }
+          }}
+          className="h-10 rounded-xl border border-border bg-white px-4 text-[12.5px] font-bold hover:bg-paper-dim"
+        >
+          Xoá bảng
+        </button>
+        <span className="text-[12px] text-ink-muted">{filled} dòng đã điền</span>
+      </div>
+
+      <p className="mb-3 rounded-xl bg-teal-light px-3.5 py-2.5 text-[12.5px] leading-relaxed text-teal-dark">
+        Mỗi dòng là 1 villa. Cột có dấu * là bắt buộc. Bấm <b>Chi tiết</b> để nhập nội dung, địa chỉ, bản đồ và <b>tải ảnh</b>. Có thể copy từ Excel
+        7 cột <b>Mã · Tên · Khu vực · Khách TC · Giá T2-T5 · T6 &amp; CN · T7 &amp; Lễ</b> rồi dán (Ctrl+V) vào ô Mã.
+      </p>
+
+      <div className="max-h-[66vh] overflow-auto rounded-2xl border border-border bg-white">
+        <table className="w-full border-separate border-spacing-0 text-[12.5px]" onPaste={onPasteTable}>
+          <thead>
+            <tr>
+              <Th w={30} sticky={0}>#</Th>
+              <Th w={90} sticky={30}>Mã *</Th>
+              <Th w={190} sticky={120}>Tên villa *</Th>
+              <Th w={110}>Khu vực *</Th>
+              <Th w={70} right>Khách TC</Th>
+              <Th w={115} right>Giá T2-T5 *</Th>
+              <Th w={115} right>T6 &amp; CN *</Th>
+              <Th w={115} right>T7 &amp; Lễ *</Th>
+              <Th w={115}>Kiểu CK</Th>
+              <Th w={95} right>CK (chung / T2-T5)</Th>
+              <Th w={90} right>CK T6 &amp; CN</Th>
+              <Th w={90} right>CK T7 &amp; Lễ</Th>
+              {AMENITIES.map((a) => (
+                <Th key={a.key} w={58} className="text-center">{a.label}</Th>
+              ))}
+              <Th w={62}>Ảnh</Th>
+              <Th w={100}> </Th>
+              <Th w={34}> </Th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => {
+              const day = isDayMode(r.disc.mode);
+              const none = r.disc.mode === "none";
+              const unit = modeUnit(r.disc.mode);
+              return (
+                <RowGroup key={r.key}>
+                  <tr>
+                    <Td sticky={0} className="px-2 text-center text-ink-muted" style={{ width: 30, minWidth: 30 }}>{i + 1}</Td>
+                    <Td sticky={30} err={r.err.code} style={{ width: 90, minWidth: 90 }}>
+                      <div data-row={i} data-paste="code"><TextCell value={r.code} onChange={(v) => setField(r.key, "code", v)} /></div>
+                    </Td>
+                    <Td sticky={120} err={r.err.name} style={{ width: 190, minWidth: 190 }}>
+                      <div data-row={i} data-paste="name"><TextCell value={r.name} onChange={(v) => setField(r.key, "name", v)} /></div>
+                    </Td>
+                    <Td err={r.err.area}>
+                      <div data-row={i} data-paste="area"><TextCell value={r.area} onChange={(v) => setField(r.key, "area", v)} /></div>
+                    </Td>
+                    <Td>
+                      <div data-row={i} data-paste="guests"><NumCell value={r.guests} col="guests" onChange={(v) => setField(r.key, "guests", v)} /></div>
+                    </Td>
+                    <Td err={r.err.p1}>
+                      <div data-row={i} data-paste="p1"><NumCell value={r.p1} col="p1" onChange={(v) => setField(r.key, "p1", v)} /></div>
+                    </Td>
+                    <Td err={r.err.p2}>
+                      <div data-row={i} data-paste="p2"><NumCell value={r.p2} col="p2" onChange={(v) => setField(r.key, "p2", v)} /></div>
+                    </Td>
+                    <Td err={r.err.p3}>
+                      <div data-row={i} data-paste="p3"><NumCell value={r.p3} col="p3" onChange={(v) => setField(r.key, "p3", v)} /></div>
+                    </Td>
+                    <Td>
+                      <SelectCell value={r.disc.mode} options={DISCOUNT_MODE_OPTIONS} onChange={(m) => changeMode(r, m)} />
+                    </Td>
+                    <Td className={none ? "!bg-paper-dim/60" : ""}>
+                      {!none && <NumCell value={r.disc.d1} col="d1" suffix={unit} onChange={(v) => patchDisc(r.key, { d1: v })} />}
+                    </Td>
+                    <Td className={!day ? "!bg-paper-dim/60" : ""}>
+                      {day && <NumCell value={r.disc.d2} col="d2" suffix={unit} onChange={(v) => patchDisc(r.key, { d2: v })} />}
+                    </Td>
+                    <Td className={!day ? "!bg-paper-dim/60" : ""}>
+                      {day && <NumCell value={r.disc.d3} col="d3" suffix={unit} onChange={(v) => patchDisc(r.key, { d3: v })} />}
+                    </Td>
+                    {AMENITIES.map((a) => (
+                      <Td key={a.key}>
+                        <CheckCell
+                          checked={r.amenities[a.key]}
+                          title={a.label}
+                          onChange={(v) => patch(r.key, { amenities: { ...r.amenities, [a.key]: v } })}
+                        />
+                      </Td>
+                    ))}
+                    <Td className="px-2 text-[11.5px]">
+                      {r.images.length ? <b className="text-teal-dark">{r.images.length} ảnh</b> : <span className="text-ink-muted">chưa có</span>}
+                    </Td>
+                    <Td className="px-1">
+                      <button type="button" onClick={() => patch(r.key, { open: !r.open })} className="whitespace-nowrap rounded-lg border border-border px-2 py-1 text-[11px] font-bold text-teal-dark hover:bg-teal-light">
+                        {r.open ? "▾ Thu gọn" : "▸ Chi tiết"}
+                      </button>
+                    </Td>
+                    <Td className="text-center">
+                      <button type="button" onClick={() => setRows((p) => (p.length > 1 ? p.filter((x) => x.key !== r.key) : p))} className="px-2 font-bold text-danger" title="Xoá dòng">
+                        ✕
+                      </button>
+                    </Td>
+                  </tr>
+                  {r.msg && (
+                    <tr>
+                      <td colSpan={COLS} className="bg-danger-light px-3 py-1.5 text-[11.5px] font-semibold text-danger">
+                        Dòng {i + 1}: {r.msg}
+                      </td>
+                    </tr>
+                  )}
+                  {r.open && (
+                    <tr>
+                      <td colSpan={COLS} className="bg-paper px-4 py-3">
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                          <Field label="Nội dung / ghi chú villa" full>
+                            <textarea value={r.note} onChange={(e) => patch(r.key, { note: e.target.value })} rows={3} placeholder="Mô tả, quy định, lưu ý..." className="w-full rounded-lg border border-border bg-white px-3 py-2 text-[12.5px]" />
+                          </Field>
+                          <Field label="Tiểu khu vực"><SimpleInput value={r.sub_region} onChange={(v) => patch(r.key, { sub_region: v })} placeholder="VD: Đồng Đò" /></Field>
+                          <Field label="Địa chỉ"><SimpleInput value={r.address} onChange={(v) => patch(r.key, { address: v })} /></Field>
+                          <Field label="Số phòng ngủ"><SimpleNum value={r.bedrooms} onChange={(v) => patch(r.key, { bedrooms: v })} /></Field>
+                          <Field label="Số giường"><SimpleNum value={r.beds} onChange={(v) => patch(r.key, { beds: v })} /></Field>
+                          <Field label="Khách tối đa thực tế"><SimpleNum value={r.max_guests} onChange={(v) => patch(r.key, { max_guests: v })} placeholder="Để trống nếu chưa xác nhận" /></Field>
+                          <Field label="Phụ thu / khách vượt chuẩn"><SimpleNum value={r.extra} onChange={(v) => patch(r.key, { extra: v })} placeholder="Để trống nếu chưa có" /></Field>
+                          <Field label="Link Google Maps" full><SimpleInput value={r.map} onChange={(v) => patch(r.key, { map: v })} /></Field>
+                          <Field label="Hình ảnh villa (ảnh đầu tiên là ảnh bìa, tự nén khi lưu)" full>
+                            <label className="inline-block cursor-pointer rounded-xl border-2 border-dashed border-teal bg-teal-light px-4 py-2 text-[12px] font-bold text-teal-dark">
+                              + Chọn ảnh (nhiều ảnh)
+                              <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => { addImages(r.key, e.target.files); e.target.value = ""; }} />
+                            </label>
+                            {r.images.length > 0 && (
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                {r.images.map((im, idx) => (
+                                  <div key={im.url} className="relative h-14 w-[70px] overflow-hidden rounded-lg border border-border bg-paper-dim">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img src={im.url} alt="" className="h-full w-full object-cover" />
+                                    <button type="button" onClick={() => removeImage(r.key, idx)} className="absolute right-0.5 top-0.5 h-4 w-4 rounded-full bg-black/60 text-[10px] leading-none text-white">×</button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </Field>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </RowGroup>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="mt-4">
+        <button
+          type="button"
+          onClick={saveAll}
+          disabled={saving || filled === 0}
+          className="h-11 rounded-xl bg-teal px-7 text-[13.5px] font-bold text-white hover:bg-teal-dark disabled:opacity-50"
+        >
+          {saving ? `Đang lưu ${progress}...` : `Lưu tất cả villa (${filled})`}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function RowGroup({ children }: { children: React.ReactNode }) {
+  return <>{children}</>;
+}
