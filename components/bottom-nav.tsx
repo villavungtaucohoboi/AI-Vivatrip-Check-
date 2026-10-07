@@ -1,8 +1,9 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, CalendarClock, Dices, PartyPopper, Plus, Search, Settings, Ship } from "lucide-react";
+import { Building2, CalendarClock, Dices, MoreHorizontal, PartyPopper, Plus, Search, Settings, Ship, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useClientRole } from "@/lib/use-client-role";
 import type { UserRole } from "@/lib/types";
@@ -10,21 +11,28 @@ import type { UserRole } from "@/lib/types";
 export function BottomNav({ role: initialRole }: { role: UserRole }) {
   const role = useClientRole(initialRole);
   const pathname = usePathname();
+  const [moreOpen, setMoreOpen] = useState(false);
   const onHolidayFunds = pathname.startsWith("/holiday-funds");
+
+  useEffect(() => setMoreOpen(false), [pathname]);
 
   if (pathname === "/admin/login" || pathname.startsWith("/payroll")) return null;
 
-  const items = [
-    { href: "/search", label: "Tìm Villa", icon: Search },
+  // 4 mục dùng nhiều nhất nằm sẵn trên thanh; phần còn lại gom vào "Thêm".
+  const main = [
+    { href: "/search", label: "Villa", icon: Search },
     { href: "/search-resort", label: "Resort/Hotel", icon: Building2 },
     { href: "/cruises", label: "Du thuyền", icon: Ship },
-    { href: "/holiday-funds", label: "Quỹ ngày lễ", icon: PartyPopper },
     { href: "/availability-links", label: "Link lịch", icon: CalendarClock },
-    { href: "/daily-wishes", label: "Lời chúc", icon: Dices },
-    ...(role === "admin"
-      ? [{ href: "/admin/products", label: "Quản lý", icon: Settings }]
-      : []),
   ];
+  const more = [
+    { href: "/holiday-funds", label: "Quỹ ngày lễ", icon: PartyPopper },
+    { href: "/daily-wishes", label: "Lời chúc", icon: Dices },
+    { href: "/payroll", label: "Bảng lương", icon: Wallet },
+    ...(role === "admin" ? [{ href: "/admin/products", label: "Quản lý", icon: Settings }] : []),
+  ];
+  const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
+  const moreActive = more.some((m) => isActive(m.href));
 
   return (
     <>
@@ -38,27 +46,61 @@ export function BottomNav({ role: initialRole }: { role: UserRole }) {
           <Plus className="h-6 w-6" />
         </Link>
       )}
+
+      {moreOpen && (
+        <div className="fixed inset-0 z-40 sm:hidden" onClick={() => setMoreOpen(false)}>
+          <div className="absolute inset-0 bg-black/40" />
+          <div
+            className="absolute inset-x-0 bottom-0 rounded-t-3xl bg-white p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="mb-3 text-[12px] font-bold text-ink-muted">Công cụ khác</p>
+            <div className="grid grid-cols-3 gap-2">
+              {more.map(({ href, label, icon: Icon }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  className={cn(
+                    "flex flex-col items-center gap-1.5 rounded-2xl px-2 py-3.5 text-[12px] font-bold",
+                    isActive(href) ? "bg-teal-light text-teal-dark" : "bg-paper text-ink"
+                  )}
+                >
+                  <Icon className="h-6 w-6" />
+                  {label}
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-white/95 backdrop-blur sm:hidden">
-        <div
-          className="grid"
-          style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}
-        >
-          {items.map(({ href, label, icon: Icon }) => {
-            const active = pathname === href || pathname.startsWith(href + "/");
-            return (
-              <Link
-                key={href}
-                href={href}
-                className={cn(
-                  "flex flex-col items-center gap-1 py-2.5 text-[11px] font-medium",
-                  active ? "text-teal" : "text-ink-muted"
-                )}
-              >
-                <Icon className="h-5 w-5" />
-                {label}
-              </Link>
-            );
-          })}
+        <div className="grid grid-cols-5">
+          {main.map(({ href, label, icon: Icon }) => (
+            <Link
+              key={href}
+              href={href}
+              className={cn(
+                "flex flex-col items-center gap-0.5 py-2 text-[10.5px] font-bold leading-tight",
+                isActive(href) ? "text-teal" : "text-ink-muted"
+              )}
+            >
+              <Icon className="h-[22px] w-[22px]" />
+              <span className="whitespace-nowrap">{label}</span>
+            </Link>
+          ))}
+          <button
+            type="button"
+            onClick={() => setMoreOpen((o) => !o)}
+            aria-expanded={moreOpen}
+            className={cn(
+              "flex flex-col items-center gap-0.5 py-2 text-[10.5px] font-bold leading-tight",
+              moreActive || moreOpen ? "text-teal" : "text-ink-muted"
+            )}
+          >
+            <MoreHorizontal className="h-[22px] w-[22px]" />
+            Thêm
+          </button>
         </div>
         <div className="h-[env(safe-area-inset-bottom)]" />
       </nav>
