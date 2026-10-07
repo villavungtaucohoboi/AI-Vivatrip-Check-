@@ -16,10 +16,11 @@ import {
   parseNum,
   useUnsavedGuard,
 } from "@/components/admin/bulk/bulk-ui";
-import { postJson, uploadRawFile } from "@/lib/bulk-upload";
+import { postJson, uploadProductImages, uploadRawFile } from "@/lib/bulk-upload";
 import {
   CRUISE_CATEGORY_LABEL,
   CRUISE_SERVICES,
+  CRUISE_STARS,
   defaultMeals,
   mealSummary,
   type Cruise,
@@ -39,6 +40,17 @@ interface FileRow {
   url?: string;
   file?: File;
 }
+interface TierRow {
+  key: number;
+  age: string;
+  price: number | null;
+}
+interface ImgRow {
+  key: number;
+  url?: string;
+  file?: File;
+  preview?: string;
+}
 interface Row {
   key: number;
   id?: string;
@@ -47,7 +59,13 @@ interface Row {
   duration: string;
   star: number;
   adult: number | null;
+  childAge: string;
   child: number | null;
+  moreChild: TierRow[];
+  capacity: number | null;
+  cabinCount: number | null;
+  url: string;
+  images: ImgRow[];
   discount: number | null;
   meals: CruiseMeal[];
   services: string[];
@@ -60,8 +78,8 @@ interface Row {
   msg: string;
 }
 
-const COLS = 20;
-const PASTE_KEYS = ["name", "duration", "adult", "child", "discount"] as const;
+const COLS = 24;
+const PASTE_KEYS = ["name", "duration", "adult", "childAge", "child", "discount"] as const;
 type PasteKey = (typeof PASTE_KEYS)[number];
 
 const MEAL_RE = { sang: /sáng|brunch/i, trua: /trưa/i, toi: /tối|tiệc/i } as const;
@@ -90,13 +108,16 @@ function detailSnap(r: Row): string {
     services: [...r.services].sort(),
     it: r.itinerary,
     note: r.note,
+    more: r.moreChild.map((t) => [t.age, t.price]),
+    url: r.url,
+    imgs: r.images.map((i) => i.url ?? `new:${i.key}`),
     cabins: r.cabins.map((c) => [c.name, c.price]),
     files: r.files.map((f) => f.url ?? `new:${f.name}:${f.size}`),
   });
 }
 
 function isEmptyRow(r: Row): boolean {
-  return !r.name && r.adult == null && !r.itinerary && r.files.length === 0;
+  return !r.name && r.adult == null && !r.itinerary && r.files.length === 0 && r.images.length === 0;
 }
 
 export function CruiseBulk({ mode, initial }: { mode: "edit" | "add"; initial: Cruise[] }) {
@@ -111,7 +132,13 @@ export function CruiseBulk({ mode, initial }: { mode: "edit" | "add"; initial: C
     duration: c.duration_label ?? "",
     star: c.star ?? 5,
     adult: c.price_adult,
-    child: c.price_child,
+    childAge: c.child_prices[0]?.age_label ?? "",
+    child: c.child_prices[0] ? c.child_prices[0].price : c.price_child || null,
+    moreChild: c.child_prices.slice(1).map((t) => ({ key: nextKey(), age: t.age_label, price: t.price })),
+    capacity: c.capacity,
+    cabinCount: c.cabin_count,
+    url: c.itinerary_url ?? "",
+    images: c.images.map((i) => ({ key: nextKey(), url: i.url })),
     discount: c.discount_percent || null,
     meals: c.meals.map((m) => ({ ...m })),
     services: [...c.services],
@@ -130,7 +157,13 @@ export function CruiseBulk({ mode, initial }: { mode: "edit" | "add"; initial: C
     duration: "",
     star: 5,
     adult: null,
+    childAge: "",
     child: null,
+    moreChild: [],
+    capacity: null,
+    cabinCount: null,
+    url: "",
+    images: [],
     discount: null,
     meals: defaultMeals(category),
     services: [],
@@ -154,7 +187,7 @@ export function CruiseBulk({ mode, initial }: { mode: "edit" | "add"; initial: C
   const [cat, setCat] = useState<"" | CruiseCategory>("");
   const [search, setSearch] = useState("");
 
-  function mainDirty(r: Row, k: "category" | "name" | "duration" | "star" | "adult" | "child" | "discount"): boolean {
+  function mainDirty(r: Row, k: "category" | "name" | "duration" | "star" | "adult" | "childAge" | "child" | "capacity" | "cabinCount" | "discount"): boolean {
     if (!r.id) return false;
     const o = origin.get(r.id);
     return !!o && o[k] !== r[k];
@@ -168,7 +201,7 @@ export function CruiseBulk({ mode, initial }: { mode: "edit" | "add"; initial: C
     if (!r.id) return !isEmptyRow(r);
     const o = origin.get(r.id);
     if (!o) return false;
-    return (["category", "name", "duration", "star", "adult", "child", "discount"] as const).some((k) => o[k] !== r[k]) || detailSnap(o) !== detailSnap(r);
+    return (["category", "name", "duration", "star", "adult", "childAge", "child", "capacity", "cabinCount", "discount"] as const).some((k) => o[k] !== r[k]) || detailSnap(o) !== detailSnap(r);
   }
 
   const dirtyCount = rows.filter(rowDirty).length;
@@ -223,6 +256,7 @@ export function CruiseBulk({ mode, initial }: { mode: "edit" | "add"; initial: C
           if (!k) return;
           if (k === "name") row.name = val;
           else if (k === "duration") row.duration = val;
+          else if (k === "childAge") row.childAge = val;
           else row[k] = parseNum(val);
         });
       });
@@ -235,6 +269,28 @@ export function CruiseBulk({ mode, initial }: { mode: "edit" | "add"; initial: C
     if (!files || files.length === 0) return;
     const added: FileRow[] = Array.from(files).map((file) => ({ key: nextKey(), name: file.name, size: file.size, file }));
     update(key, (r) => ({ files: [...r.files, ...added] }));
+  }
+
+  function addImages(key: number, files: FileList | null) {
+    if (!files || files.length === 0) return;
+    const added: ImgRow[] = Array.from(files)
+      .filter((f) => f.type.startsWith("image/"))
+      .map((file) => ({ key: nextKey(), file, preview: URL.createObjectURL(file) }));
+    if (added.length === 0) {
+      toast.error("Chỉ chọn được file ảnh (JPG, PNG, WebP).");
+      return;
+    }
+    update(key, (r) => ({ images: [...r.images, ...added] }));
+  }
+  function moveImage(key: number, imgKey: number, dir: -1 | 1) {
+    update(key, (r) => {
+      const i = r.images.findIndex((x) => x.key === imgKey);
+      const j = i + dir;
+      if (i < 0 || j < 0 || j >= r.images.length) return {};
+      const next = [...r.images];
+      [next[i], next[j]] = [next[j], next[i]];
+      return { images: next };
+    });
   }
 
   function undoAll() {
@@ -307,6 +363,15 @@ export function CruiseBulk({ mode, initial }: { mode: "edit" | "add"; initial: C
             files.push({ file_name: f.name, file_url: f.url, file_size: f.size });
           }
         }
+        const images: { url: string }[] = [];
+        const pending = r.images.filter((i) => i.file);
+        const uploaded = pending.length ? await uploadProductImages(`cruise-images/${r.id ?? `new-${r.key}`}`, pending.map((i) => i.file as File)) : [];
+        let ui = 0;
+        for (const im of r.images) images.push({ url: im.file ? uploaded[ui++] : (im.url as string) });
+        const childTiers = [
+          ...(r.child != null || r.childAge.trim() ? [{ age_label: r.childAge.trim() || "Trẻ em", price: r.child ?? 0 }] : []),
+          ...r.moreChild.filter((t) => t.age.trim()).map((t) => ({ age_label: t.age.trim(), price: t.price ?? 0 })),
+        ];
         const result = await postJson<{ id: string }>("/api/admin/bulk/cruises", {
           cruise: {
             id: r.id,
@@ -316,6 +381,11 @@ export function CruiseBulk({ mode, initial }: { mode: "edit" | "add"; initial: C
             star: r.star,
             price_adult: r.adult ?? 0,
             price_child: r.child ?? 0,
+            child_prices: childTiers,
+            images,
+            capacity: r.capacity,
+            cabin_count: r.cabinCount,
+            itinerary_url: r.url.trim() || null,
             discount_percent: r.discount ?? 0,
             meals: r.meals,
             services: r.services,
@@ -333,6 +403,7 @@ export function CruiseBulk({ mode, initial }: { mode: "edit" | "add"; initial: C
           err: {},
           msg: "",
           files: files.map((f) => ({ key: nextKey(), name: f.file_name, size: f.file_size, url: f.file_url })),
+          images: images.map((i) => ({ key: nextKey(), url: i.url })),
         });
       } catch (err) {
         failed.set(r.key, err instanceof Error ? err.message : "Lỗi không xác định.");
@@ -396,8 +467,8 @@ export function CruiseBulk({ mode, initial }: { mode: "edit" | "add"; initial: C
 
       <p className="mb-3 rounded-xl bg-teal-light px-3.5 py-2.5 text-[12.5px] leading-relaxed text-teal-dark">
         Mỗi dòng là 1 du thuyền. <b>Tích sẵn bữa ăn và dịch vụ bao gồm</b> ngay trên bảng — tích <b>Trọn gói</b> là tự tích đủ các bữa theo lịch trình.
-        Bấm <b>Chi tiết</b> để nhập lịch trình (mỗi dòng "giờ | nội dung"), giá từng hạng cabin (tour qua đêm), tuỳ chỉnh từng bữa ăn và <b>tải file lịch trình</b> lên (khi Sale tải xuống sẽ tự nén thành 1 file zip).
-        Dán từ Excel được 5 cột: Tên · Thời gian · Giá NL · Giá TE · CK% (đặt con trỏ ở ô Tên).
+        Bấm <b>Chi tiết</b> để thêm <b>ảnh</b>, thêm mốc tuổi trẻ em, link lịch trình, nhập lịch trình (mỗi dòng "giờ | nội dung"), giá từng hạng cabin (tour qua đêm), tuỳ chỉnh từng bữa ăn và <b>tải file lịch trình</b> lên (khi Sale tải xuống sẽ tự nén thành 1 file zip).
+        Dán từ Excel được 6 cột: Tên · Thời gian · Giá NL · Tuổi TE · Giá TE · CK% (đặt con trỏ ở ô Tên).
       </p>
 
       <div className="max-h-[68vh] overflow-auto rounded-2xl border border-border bg-white">
@@ -408,9 +479,12 @@ export function CruiseBulk({ mode, initial }: { mode: "edit" | "add"; initial: C
               <Th w={210} sticky={30}>Tên du thuyền *</Th>
               <Th w={105}>Loại</Th>
               <Th w={100}>Thời gian</Th>
-              <Th w={72}>Hạng sao</Th>
+              <Th w={78}>Hạng sao</Th>
+              <Th w={72} right>Số chỗ</Th>
+              <Th w={72} right>Số cabin</Th>
               <Th w={115} right>Giá người lớn *</Th>
-              <Th w={105} right>Giá trẻ em</Th>
+              <Th w={110}>Trẻ em: độ tuổi</Th>
+              <Th w={105} right>Trẻ em: giá</Th>
               <Th w={72} right>CK %</Th>
               <Th w={54} className="text-center">Ăn sáng</Th>
               <Th w={54} className="text-center">Ăn trưa</Th>
@@ -447,10 +521,19 @@ export function CruiseBulk({ mode, initial }: { mode: "edit" | "add"; initial: C
                       <div data-key={r.key} data-paste="duration"><TextCell value={r.duration} onChange={(v) => patch(r.key, { duration: v })} placeholder="VD: 2N1Đ" /></div>
                     </Td>
                     <Td dirty={mainDirty(r, "star")}>
-                      <SelectCell value={r.star} options={[{ value: 3, label: "3 sao" }, { value: 4, label: "4 sao" }, { value: 5, label: "5 sao" }]} onChange={(v) => patch(r.key, { star: v })} />
+                      <SelectCell value={r.star} options={CRUISE_STARS.map((n) => ({ value: n as number, label: `${n} sao` }))} onChange={(v) => patch(r.key, { star: v })} />
+                    </Td>
+                    <Td dirty={mainDirty(r, "capacity")}>
+                      <NumCell value={r.capacity} col="capacity" onChange={(v) => patch(r.key, { capacity: v })} />
+                    </Td>
+                    <Td dirty={mainDirty(r, "cabinCount")}>
+                      <NumCell value={r.cabinCount} col="cabinCount" onChange={(v) => patch(r.key, { cabinCount: v })} />
                     </Td>
                     <Td err={r.err.adult} dirty={mainDirty(r, "adult")}>
                       <div data-key={r.key} data-paste="adult"><NumCell value={r.adult} col="adult" onChange={(v) => { patch(r.key, { adult: v }); clearErr(r.key, "adult"); }} /></div>
+                    </Td>
+                    <Td dirty={mainDirty(r, "childAge")}>
+                      <div data-key={r.key} data-paste="childAge"><TextCell value={r.childAge} onChange={(v) => patch(r.key, { childAge: v })} placeholder="VD: 5-9 tuổi" /></div>
                     </Td>
                     <Td dirty={mainDirty(r, "child")}>
                       <div data-key={r.key} data-paste="child"><NumCell value={r.child} col="child" onChange={(v) => patch(r.key, { child: v })} /></div>
@@ -544,6 +627,54 @@ export function CruiseBulk({ mode, initial }: { mode: "edit" | "add"; initial: C
                         )}
 
                         <div className="mt-4">
+                          <p className="mb-1.5 text-[11px] font-bold text-ink-muted">GIÁ TRẺ EM THEO ĐỘ TUỔI (mốc 1 nhập ngay trên bảng; thêm mốc khác ở đây)</p>
+                          <div className="max-w-md space-y-1.5">
+                            {r.moreChild.map((t) => (
+                              <div key={t.key} className="flex items-center gap-2">
+                                <input value={t.age} onChange={(e) => update(r.key, (x) => ({ moreChild: x.moreChild.map((y) => (y.key === t.key ? { ...y, age: e.target.value } : y)) }))} placeholder="VD: 10-14 tuổi" className="h-8 flex-1 rounded-md border border-border bg-white px-2 text-[12px]" />
+                                <div className="w-36"><SimpleNum value={t.price} onChange={(v) => update(r.key, (x) => ({ moreChild: x.moreChild.map((y) => (y.key === t.key ? { ...y, price: v } : y)) }))} placeholder="Giá" /></div>
+                                <button type="button" onClick={() => update(r.key, (x) => ({ moreChild: x.moreChild.filter((y) => y.key !== t.key) }))} className="px-1 font-bold text-danger">✕</button>
+                              </div>
+                            ))}
+                          </div>
+                          <div className="mt-2">
+                            <MiniBtn onClick={() => update(r.key, (x) => ({ moreChild: [...x.moreChild, { key: nextKey(), age: "", price: null }] }))}>+ Thêm mốc tuổi</MiniBtn>
+                          </div>
+                        </div>
+
+                        <div className="mt-4">
+                          <p className="mb-1.5 text-[11px] font-bold text-ink-muted">ẢNH DU THUYỀN (ảnh đầu tiên là ảnh bìa — hiện ra ngoài trang Sale)</p>
+                          <label className="inline-block cursor-pointer rounded-xl border-2 border-dashed border-teal bg-teal-light px-4 py-2 text-[12px] font-bold text-teal-dark">
+                            + Thêm ảnh (chọn được nhiều ảnh)
+                            <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => { addImages(r.key, e.target.files); e.target.value = ""; }} />
+                          </label>
+                          {r.images.length > 0 && (
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {r.images.map((im, ii) => (
+                                <div key={im.key} className="w-24">
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img src={im.preview ?? im.url} alt="" className="h-16 w-24 rounded-lg border border-border object-cover" />
+                                  <div className="mt-1 flex items-center justify-between text-[11px] font-bold">
+                                    <span className="text-ink-muted">{ii === 0 ? "Bìa" : ii + 1}{im.file ? "*" : ""}</span>
+                                    <span className="flex gap-1.5">
+                                      <button type="button" disabled={ii === 0} onClick={() => moveImage(r.key, im.key, -1)} className="text-teal-dark disabled:opacity-30" title="Đưa lên trước">◀</button>
+                                      <button type="button" disabled={ii === r.images.length - 1} onClick={() => moveImage(r.key, im.key, 1)} className="text-teal-dark disabled:opacity-30" title="Đưa ra sau">▶</button>
+                                      <button type="button" onClick={() => update(r.key, (x) => ({ images: x.images.filter((y) => y.key !== im.key) }))} className="text-danger" title="Xoá ảnh">✕</button>
+                                    </span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="mt-4 max-w-xl">
+                          <Field label="Link lịch trình gửi khách (tuỳ chọn — dán link Drive/Canva...; để trống thì Sale copy ra trang riêng của VivaTrip)" full>
+                            <input value={r.url} onChange={(e) => patch(r.key, { url: e.target.value })} placeholder="https://..." className="h-9 w-full rounded-lg border border-border bg-white px-3 text-[12.5px]" />
+                          </Field>
+                        </div>
+
+                        <div className="mt-4">
                           <p className="mb-1.5 text-[11px] font-bold text-ink-muted">FILE LỊCH TRÌNH / ẢNH (Sale tải xuống sẽ tự nén thành file zip)</p>
                           <label className="inline-block cursor-pointer rounded-xl border-2 border-dashed border-teal bg-teal-light px-4 py-2 text-[12px] font-bold text-teal-dark">
                             + Tải file lên (PDF, ảnh, Word...)
@@ -595,6 +726,8 @@ function structuredCloneRow(r: Row): Row {
     meals: r.meals.map((m) => ({ ...m })),
     services: [...r.services],
     cabins: r.cabins.map((c) => ({ ...c })),
+    moreChild: r.moreChild.map((t) => ({ ...t })),
+    images: r.images.map((i) => ({ ...i })),
     files: r.files.map((f) => ({ ...f })),
     err: {},
     msg: "",

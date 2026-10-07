@@ -19,6 +19,11 @@ interface CruisePayload {
   itinerary: string;
   note: string | null;
   sort_order?: number;
+  capacity: number | null;
+  cabin_count: number | null;
+  itinerary_url: string | null;
+  child_prices: { age_label: string; price: number }[];
+  images: { url: string }[];
   cabins: { name: string; price: number }[];
   files: { file_name: string; file_url: string; file_size: number }[];
 }
@@ -32,7 +37,7 @@ function validate(c: CruisePayload): string | null {
   if (typeof c.discount_percent !== "number" || c.discount_percent < 0 || c.discount_percent > 100) {
     return "Chiết khấu phải từ 0 đến 100%.";
   }
-  if (c.star !== null && (!Number.isInteger(c.star) || c.star < 1 || c.star > 5)) return "Hạng sao không hợp lệ.";
+  if (c.star !== null && (!Number.isInteger(c.star) || c.star < 1 || c.star > 6)) return "Hạng sao không hợp lệ (3–6 sao).";
   if (!Array.isArray(c.meals) || c.meals.some((m) => typeof m.label !== "string" || typeof m.included !== "boolean")) {
     return "Danh sách bữa ăn không hợp lệ.";
   }
@@ -40,6 +45,13 @@ function validate(c: CruisePayload): string | null {
   if (!Array.isArray(c.cabins) || c.cabins.some((x) => !x.name?.trim() || typeof x.price !== "number" || x.price < 0)) {
     return "Hạng cabin không hợp lệ.";
   }
+  for (const k of ["capacity", "cabin_count"] as const) {
+    if (c[k] !== null && c[k] !== undefined && (!Number.isInteger(c[k]) || (c[k] as number) < 0)) return "Số chỗ / số cabin không hợp lệ.";
+  }
+  if (!Array.isArray(c.child_prices) || c.child_prices.some((x) => typeof x.age_label !== "string" || typeof x.price !== "number" || x.price < 0)) {
+    return "Giá trẻ em theo độ tuổi không hợp lệ.";
+  }
+  if (!Array.isArray(c.images) || c.images.some((x) => !x.url)) return "Ảnh không hợp lệ.";
   if (!Array.isArray(c.files) || c.files.some((f) => !f.file_url || !f.file_name)) return "File đính kèm không hợp lệ.";
   return null;
 }
@@ -58,7 +70,10 @@ export async function POST(req: NextRequest) {
     duration_label: c.duration_label?.trim() || null,
     star: c.star,
     price_adult: Math.round(c.price_adult),
-    price_child: Math.round(c.price_child),
+    price_child: Math.round(c.child_prices.find((x) => x.age_label.trim())?.price ?? c.price_child ?? 0),
+    capacity: c.capacity ?? null,
+    cabin_count: c.cabin_count ?? null,
+    itinerary_url: c.itinerary_url?.trim() || null,
     discount_percent: c.discount_percent,
     meals: c.meals.filter((m) => m.label.trim()).map((m) => ({ label: m.label.trim(), included: m.included })),
     services: c.services,
@@ -90,6 +105,23 @@ export async function POST(req: NextRequest) {
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
   }
 
+  const { error: delChild } = await supabase.from("cruise_child_prices").delete().eq("cruise_id", id);
+  if (delChild) return NextResponse.json({ error: delChild.message }, { status: 400 });
+  const tiers = c.child_prices.filter((x) => x.age_label.trim());
+  if (tiers.length) {
+    const { error } = await supabase
+      .from("cruise_child_prices")
+      .insert(tiers.map((x, i) => ({ cruise_id: id, age_label: x.age_label.trim(), price: Math.round(x.price), sort_order: i })));
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  }
+
+  const { error: delImg } = await supabase.from("cruise_images").delete().eq("cruise_id", id);
+  if (delImg) return NextResponse.json({ error: delImg.message }, { status: 400 });
+  if (c.images.length) {
+    const { error } = await supabase.from("cruise_images").insert(c.images.map((x, i) => ({ cruise_id: id, url: x.url, sort_order: i })));
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  }
+
   const { error: delFile } = await supabase.from("cruise_files").delete().eq("cruise_id", id);
   if (delFile) return NextResponse.json({ error: delFile.message }, { status: 400 });
   if (c.files.length) {
@@ -100,6 +132,7 @@ export async function POST(req: NextRequest) {
   }
 
   revalidatePath("/cruises");
+  revalidatePath(`/cruises/${id}`);
   revalidatePath("/admin/bulk/cruise/edit");
   return NextResponse.json({ id });
 }

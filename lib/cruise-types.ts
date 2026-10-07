@@ -33,6 +33,19 @@ export interface CruiseCabin {
   sort_order: number;
 }
 
+export interface CruiseChildPrice {
+  id?: string;
+  age_label: string;
+  price: number;
+}
+
+export interface CruiseImage {
+  id?: string;
+  url: string;
+}
+
+export const CRUISE_STARS = [3, 4, 5, 6] as const;
+
 export interface CruiseFile {
   id: string;
   cruise_id: string;
@@ -56,8 +69,20 @@ export interface Cruise {
   note: string | null;
   sort_order: number;
   is_active: boolean;
+  capacity: number | null;
+  cabin_count: number | null;
+  itinerary_url: string | null;
+  child_prices: CruiseChildPrice[];
+  images: CruiseImage[];
   cabins: CruiseCabin[];
   files: CruiseFile[];
+}
+
+/** Link gửi khách: link tuỳ chọn Admin nhập, nếu trống dùng trang riêng của VivaTrip. */
+export function cruiseShareUrl(c: Pick<Cruise, "id" | "itinerary_url">, origin: string): string {
+  const custom = c.itinerary_url?.trim();
+  if (custom) return /^https?:\/\//i.test(custom) ? custom : `https://${custom}`;
+  return `${origin}/cruises/${c.id}`;
 }
 
 /** Mẫu bữa ăn gợi ý khi tạo mới. */
@@ -127,8 +152,9 @@ export function cruiseQuoteText(c: Cruise): string {
   lines.push(c.name);
   lines.push(`${c.duration_label ?? CRUISE_CATEGORY_LABEL[c.category]}${c.star ? ` · ${c.star} sao` : ""}`);
   const adult = priceAfterPercent(c.price_adult, c.discount_percent);
-  const child = priceAfterPercent(c.price_child, c.discount_percent);
-  lines.push(`Giá người lớn: ${vnd(adult)}đ · Trẻ em: ${vnd(child)}đ${c.discount_percent ? ` (đã chiết khấu ${c.discount_percent}%)` : ""}`);
+  lines.push(`Giá người lớn: ${vnd(adult)}đ${c.discount_percent ? ` (đã chiết khấu ${c.discount_percent}%)` : ""}`);
+  c.child_prices.forEach((x) => lines.push(`Trẻ em ${x.age_label}: ${vnd(priceAfterPercent(x.price, c.discount_percent))}đ`));
+  if (c.capacity || c.cabin_count) lines.push([c.capacity ? `${c.capacity} chỗ` : "", c.cabin_count ? `${c.cabin_count} cabin` : ""].filter(Boolean).join(" · "));
   if (c.cabins.length) {
     lines.push("", "Hạng cabin:");
     c.cabins.forEach((x) => lines.push(`- ${x.name}: ${vnd(priceAfterPercent(x.price, c.discount_percent))}đ/khách`));

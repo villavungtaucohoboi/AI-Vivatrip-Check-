@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Cruise, CruiseCabin, CruiseFile, CruiseMeal } from "@/lib/cruise-types";
+import type { Cruise, CruiseCabin, CruiseChildPrice, CruiseFile, CruiseImage, CruiseMeal } from "@/lib/cruise-types";
 
 /** Lấy danh sách du thuyền kèm hạng cabin + file đính kèm (dùng chung cho trang Sale và Admin). */
 export async function fetchCruises(supabase: SupabaseClient, opts: { onlyActive?: boolean } = {}): Promise<Cruise[]> {
@@ -10,9 +10,11 @@ export async function fetchCruises(supabase: SupabaseClient, opts: { onlyActive?
   if (list.length === 0) return [];
 
   const ids = list.map((c) => c.id as string);
-  const [{ data: cabins }, { data: files }] = await Promise.all([
+  const [{ data: cabins }, { data: files }, { data: childs }, { data: imgs }] = await Promise.all([
     supabase.from("cruise_cabins").select("*").in("cruise_id", ids).order("sort_order"),
     supabase.from("cruise_files").select("*").in("cruise_id", ids).order("created_at"),
+    supabase.from("cruise_child_prices").select("*").in("cruise_id", ids).order("sort_order"),
+    supabase.from("cruise_images").select("*").in("cruise_id", ids).order("sort_order"),
   ]);
 
   return list.map((c) => ({
@@ -30,6 +32,15 @@ export async function fetchCruises(supabase: SupabaseClient, opts: { onlyActive?
     note: c.note,
     sort_order: c.sort_order,
     is_active: c.is_active,
+    capacity: c.capacity ?? null,
+    cabin_count: c.cabin_count ?? null,
+    itinerary_url: c.itinerary_url ?? null,
+    child_prices: ((childs ?? []) as (CruiseChildPrice & { cruise_id: string })[])
+      .filter((x) => x.cruise_id === c.id)
+      .map((x) => ({ id: x.id, age_label: x.age_label, price: Number(x.price) })),
+    images: ((imgs ?? []) as (CruiseImage & { cruise_id: string })[])
+      .filter((x) => x.cruise_id === c.id)
+      .map((x) => ({ id: x.id, url: x.url })),
     cabins: ((cabins ?? []) as CruiseCabin[])
       .filter((x) => x.cruise_id === c.id)
       .map((x) => ({ ...x, price: Number(x.price) })),
@@ -37,4 +48,11 @@ export async function fetchCruises(supabase: SupabaseClient, opts: { onlyActive?
       .filter((f) => f.cruise_id === c.id)
       .map((f) => ({ ...f, file_size: Number(f.file_size) })),
   }));
+}
+
+export async function fetchCruiseById(supabase: SupabaseClient, id: string): Promise<Cruise | null> {
+  const { data } = await supabase.from("cruises").select("id").eq("id", id).maybeSingle();
+  if (!data) return null;
+  const all = await fetchCruises(supabase);
+  return all.find((c) => c.id === id) ?? null;
 }
