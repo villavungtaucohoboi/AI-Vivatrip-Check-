@@ -23,6 +23,7 @@ export async function fetchCruises(supabase: SupabaseClient, opts: { onlyActive?
     name: c.name,
     duration_label: c.duration_label,
     star: c.star,
+    variant: c.variant ?? null,
     price_adult: Number(c.price_adult),
     price_child: Number(c.price_child),
     discount_percent: Number(c.discount_percent),
@@ -37,7 +38,7 @@ export async function fetchCruises(supabase: SupabaseClient, opts: { onlyActive?
     itinerary_url: c.itinerary_url ?? null,
     child_prices: ((childs ?? []) as (CruiseChildPrice & { cruise_id: string })[])
       .filter((x) => x.cruise_id === c.id)
-      .map((x) => ({ id: x.id, age_label: x.age_label, price: Number(x.price) })),
+      .map((x) => ({ id: x.id, age_label: x.age_label, age_from: x.age_from ?? null, age_to: x.age_to ?? null, price: Number(x.price) })),
     images: ((imgs ?? []) as (CruiseImage & { cruise_id: string })[])
       .filter((x) => x.cruise_id === c.id)
       .map((x) => ({ id: x.id, url: x.url })),

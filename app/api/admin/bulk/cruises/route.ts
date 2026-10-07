@@ -11,6 +11,7 @@ interface CruisePayload {
   name: string;
   duration_label: string | null;
   star: number | null;
+  variant: string | null;
   price_adult: number;
   price_child: number;
   discount_percent: number;
@@ -22,7 +23,7 @@ interface CruisePayload {
   capacity: number | null;
   cabin_count: number | null;
   itinerary_url: string | null;
-  child_prices: { age_label: string; price: number }[];
+  child_prices: { age_label: string; age_from: number | null; age_to: number | null; price: number }[];
   images: { url: string }[];
   cabins: { name: string; price: number }[];
   files: { file_name: string; file_url: string; file_size: number }[];
@@ -48,6 +49,14 @@ function validate(c: CruisePayload): string | null {
   for (const k of ["capacity", "cabin_count"] as const) {
     if (c[k] !== null && c[k] !== undefined && (!Number.isInteger(c[k]) || (c[k] as number) < 0)) return "Số chỗ / số cabin không hợp lệ.";
   }
+  const okVariant = c.category === "day" ? ["day_cruise", "dinner_cruise"] : ["ha_long", "lan_ha"];
+  if (c.variant !== null && c.variant !== undefined && !okVariant.includes(c.variant)) return "Phân loại du thuyền không hợp lệ.";
+  for (const t of c.child_prices ?? []) {
+    for (const v of [t.age_from, t.age_to]) {
+      if (v !== null && v !== undefined && (!Number.isInteger(v) || v < 0 || v > 17)) return "Độ tuổi trẻ em phải từ 0 đến 17.";
+    }
+    if (t.age_from != null && t.age_to != null && t.age_from > t.age_to) return "Độ tuổi trẻ em: \"từ\" phải nhỏ hơn hoặc bằng \"đến\".";
+  }
   if (!Array.isArray(c.child_prices) || c.child_prices.some((x) => typeof x.age_label !== "string" || typeof x.price !== "number" || x.price < 0)) {
     return "Giá trẻ em theo độ tuổi không hợp lệ.";
   }
@@ -71,6 +80,7 @@ export async function POST(req: NextRequest) {
     star: c.star,
     price_adult: Math.round(c.price_adult),
     price_child: Math.round(c.child_prices.find((x) => x.age_label.trim())?.price ?? c.price_child ?? 0),
+    variant: c.variant || null,
     capacity: c.capacity ?? null,
     cabin_count: c.cabin_count ?? null,
     itinerary_url: c.itinerary_url?.trim() || null,
@@ -111,7 +121,7 @@ export async function POST(req: NextRequest) {
   if (tiers.length) {
     const { error } = await supabase
       .from("cruise_child_prices")
-      .insert(tiers.map((x, i) => ({ cruise_id: id, age_label: x.age_label.trim(), price: Math.round(x.price), sort_order: i })));
+      .insert(tiers.map((x, i) => ({ cruise_id: id, age_label: x.age_label.trim(), age_from: x.age_from ?? null, age_to: x.age_to ?? null, price: Math.round(x.price), sort_order: i })));
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
   }
 

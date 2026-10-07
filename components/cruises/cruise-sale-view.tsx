@@ -1,15 +1,18 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Check, Download, Link2, Loader2, Users, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Check, Download, ImageIcon, Link2, Loader2, Share2, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/empty-state";
 import { formatVND } from "@/lib/format";
+import { canShareImages, copyImagesCollage, shareImages } from "@/lib/cruise-images";
 import {
   CRUISE_CATEGORY_LABEL,
   CRUISE_STARS,
+  CRUISE_VARIANTS,
+  variantLabel,
   cruiseQuoteText,
   cruiseShareUrl,
   includedServices,
@@ -49,6 +52,11 @@ async function copyText(text: string) {
 
 export function CruiseSaleView({ cruises, single = false }: { cruises: Cruise[]; single?: boolean }) {
   const [star, setStar] = useState<number | null>(null);
+  const [bay, setBay] = useState<string | null>(null);
+  const [tab, setTab] = useState<Record<string, string>>({});
+  const [imgBusy, setImgBusy] = useState<string | null>(null);
+  const [canShare, setCanShare] = useState(false);
+  useEffect(() => setCanShare(canShareImages()), []);
   const [lightbox, setLightbox] = useState<{ images: string[]; index: number } | null>(null);
   const [cat, setCat] = useState<CruiseCategory>("day");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -56,10 +64,26 @@ export function CruiseSaleView({ cruises, single = false }: { cruises: Cruise[];
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const counts = useMemo(
-    () => ({ day: cruises.filter((c) => c.category === "day").length, night: cruises.filter((c) => c.category === "night").length }),
+    () => ({ day: new Set(cruises.filter((c) => c.category === "day").map((c) => c.name.trim().toLowerCase())).size, night: cruises.filter((c) => c.category === "night").length }),
     [cruises]
   );
-  const list = single ? cruises : cruises.filter((c) => c.category === cat && (star === null || c.star === star));
+  const inCat = single ? cruises : cruises.filter((c) => c.category === cat);
+  const filtered = single ? cruises : inCat.filter((c) => (star === null || c.star === star) && (cat !== "night" || bay === null || c.variant === bay));
+  // Trong ngày: các dòng cùng tên (Day Cruise / Dinner Cruise) gộp thành 1 thẻ có tab.
+  const groups = useMemo(() => {
+    const map = new Map<string, Cruise[]>();
+    for (const c of filtered) {
+      const key = !single && c.category === "day" ? `d:${c.name.trim().toLowerCase()}` : c.id;
+      map.set(key, [...(map.get(key) ?? []), c]);
+    }
+    const order = CRUISE_VARIANTS.day.map((v) => v.key);
+    return Array.from(map.entries()).map(([key, rows]) => ({
+      key,
+      rows: [...rows].sort((a, b) => order.indexOf(a.variant ?? "") - order.indexOf(b.variant ?? "")),
+    }));
+  }, [filtered, single]);
+  const list = groups;
+  const baysPresent = CRUISE_VARIANTS.night.filter((v) => cruises.some((c) => c.category === "night" && c.variant === v.key));
   const starsPresent = CRUISE_STARS.filter((n) => cruises.some((c) => c.category === cat && c.star === n));
 
   function toggle(id: string) {
@@ -76,6 +100,29 @@ export function CruiseSaleView({ cruises, single = false }: { cruises: Cruise[];
     setCopiedId(c.id);
     toast.success(`Đã copy link lịch trình ${c.name} — dán vào Zalo gửi khách.`);
     setTimeout(() => setCopiedId(null), 1800);
+  }
+
+  async function handleCopyImages(id: string, urls: string[]) {
+    setImgBusy(`c${id}`);
+    try {
+      await copyImagesCollage(urls);
+      toast.success(`Đã copy ${Math.min(urls.length, 9)} ảnh (ghép thành 1 ảnh) — mở Zalo bấm Ctrl+V để dán.`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Không copy được ảnh.");
+    } finally {
+      setImgBusy(null);
+    }
+  }
+
+  async function handleShareImages(id: string, name: string, urls: string[]) {
+    setImgBusy(`s${id}`);
+    try {
+      await shareImages(urls, name);
+    } catch (e) {
+      if (!(e instanceof Error && e.name === "AbortError")) toast.error("Không chia sẻ được ảnh. Thử lại hoặc dùng nút Copy ảnh.");
+    } finally {
+      setImgBusy(null);
+    }
   }
 
   async function handleZip(targets: Cruise[], zipName: string, busyKey: string) {
@@ -144,7 +191,7 @@ export function CruiseSaleView({ cruises, single = false }: { cruises: Cruise[];
         {(["day", "night"] as const).map((c) => (
           <button
             key={c}
-            onClick={() => { setCat(c); setStar(null); }}
+            onClick={() => { setCat(c); setStar(null); setBay(null); }}
             className={`rounded-xl px-4 py-2.5 text-[13px] font-bold ${cat === c ? "bg-teal text-white" : "border border-border bg-white text-ink-muted hover:bg-paper-dim"}`}
           >
             {CRUISE_CATEGORY_LABEL[c]} <span className="opacity-70">({counts[c]})</span>
@@ -161,6 +208,21 @@ export function CruiseSaleView({ cruises, single = false }: { cruises: Cruise[];
           </Button>
         )}
       </div>)}
+
+      {!single && cat === "night" && baysPresent.length > 0 && (
+        <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+          <span className="text-[11.5px] font-bold text-ink-muted">Vịnh:</span>
+          {[null, ...baysPresent.map((v) => v.key)].map((k) => (
+            <button
+              key={k ?? "all"}
+              onClick={() => setBay(k)}
+              className={`rounded-full px-3 py-1.5 text-[12px] font-bold ${bay === k ? "bg-teal-dark text-white" : "border border-border bg-white text-ink-muted hover:bg-paper-dim"}`}
+            >
+              {k === null ? "Tất cả" : variantLabel(k)}
+            </button>
+          ))}
+        </div>
+      )}
 
       {!single && starsPresent.length > 0 && (
         <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
@@ -182,12 +244,13 @@ export function CruiseSaleView({ cruises, single = false }: { cruises: Cruise[];
           <EmptyState title="Chưa có du thuyền nào ở mục này" description="Admin sẽ cập nhật sớm." />
         ) : (
           <div className={single ? "mx-auto max-w-xl" : "grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3"}>
-            {list.map((c) => {
+            {list.map((g) => {
+              const c = g.rows.find((r) => r.id === tab[g.key]) ?? g.rows[0];
               const meal = mealSummary(c.meals);
               const services = includedServices(c.services);
               const it = itineraryItems(c.itinerary);
               const adult = priceAfterPercent(c.price_adult, c.discount_percent);
-              const imgs = c.images.map((i) => i.url);
+              const imgs = (c.images.length ? c.images : g.rows.flatMap((r) => r.images)).map((i) => i.url);
               return (
                 <Card key={c.id} className="flex flex-col overflow-hidden">
                   <div className={`relative bg-gradient-to-br from-teal-dark to-teal ${imgs.length ? "h-44" : "h-24"}`}>
@@ -201,7 +264,7 @@ export function CruiseSaleView({ cruises, single = false }: { cruises: Cruise[];
                       </button>
                     )}
                     <span className="absolute left-3 top-3 rounded-full bg-white/95 px-2.5 py-1 text-[10.5px] font-bold text-teal-dark">
-                      {CRUISE_CATEGORY_LABEL[c.category]}
+                      {c.category === "night" && variantLabel(c.variant) ? variantLabel(c.variant) : CRUISE_CATEGORY_LABEL[c.category]}
                     </span>
                     {!single && (<label className="absolute right-3 top-3 flex cursor-pointer items-center gap-1.5 rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-bold">
                       <input type="checkbox" checked={selected.has(c.id)} onChange={() => toggle(c.id)} className="h-3.5 w-3.5 accent-[#0E6B5A]" />
@@ -211,7 +274,22 @@ export function CruiseSaleView({ cruises, single = false }: { cruises: Cruise[];
 
                   <div className="flex flex-1 flex-col p-3.5">
                     <p className="text-[14.5px] font-bold text-ink">{c.name}</p>
+                    {g.rows.length > 1 && (
+                      <div className="mt-2 flex gap-1 rounded-xl bg-paper-dim p-1">
+                        {g.rows.map((r) => (
+                          <button
+                            key={r.id}
+                            type="button"
+                            onClick={() => setTab((p) => ({ ...p, [g.key]: r.id }))}
+                            className={`flex-1 rounded-lg px-2 py-1.5 text-[12px] font-bold ${r.id === c.id ? "bg-white text-teal-dark shadow-sm" : "text-ink-muted"}`}
+                          >
+                            {variantLabel(r.variant) || "Tiêu chuẩn"}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                     <p className="mt-0.5 text-[11.5px] text-ink-muted">
+                      {c.category === "night" && variantLabel(c.variant) ? `${variantLabel(c.variant)} · ` : ""}
                       {c.duration_label ?? CRUISE_CATEGORY_LABEL[c.category]}
                       {c.star ? ` · ${c.star} sao` : ""}
                     </p>
@@ -310,6 +388,20 @@ export function CruiseSaleView({ cruises, single = false }: { cruises: Cruise[];
                         Tải file nén
                       </Button>
                     </div>
+                    )}
+                    {!single && imgs.length > 0 && (
+                      <div className="flex gap-2 pt-2">
+                        <Button variant="outline" className="flex-1" disabled={imgBusy !== null} onClick={() => handleCopyImages(c.id, imgs)}>
+                          {imgBusy === `c${c.id}` ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageIcon className="h-4 w-4" />}
+                          Copy ảnh
+                        </Button>
+                        {canShare && (
+                          <Button variant="outline" className="flex-1" disabled={imgBusy !== null} onClick={() => handleShareImages(c.id, c.name, imgs)}>
+                            {imgBusy === `s${c.id}` ? <Loader2 className="h-4 w-4 animate-spin" /> : <Share2 className="h-4 w-4" />}
+                            Gửi ảnh Zalo
+                          </Button>
+                        )}
+                      </div>
                     )}
                   </div>
                 </Card>

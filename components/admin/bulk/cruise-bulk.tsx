@@ -21,6 +21,9 @@ import {
   CRUISE_CATEGORY_LABEL,
   CRUISE_SERVICES,
   CRUISE_STARS,
+  CRUISE_VARIANTS,
+  childAgeLabel,
+  defaultVariant,
   defaultMeals,
   mealSummary,
   type Cruise,
@@ -42,8 +45,15 @@ interface FileRow {
 }
 interface TierRow {
   key: number;
-  age: string;
+  from: number | null;
+  to: number | null;
   price: number | null;
+}
+/** Dữ liệu cũ chỉ có nhãn chữ (VD "5-9 tuổi") → tách lấy số. */
+function tierAges(t: { age_label: string; age_from: number | null; age_to: number | null }): { from: number | null; to: number | null } {
+  if (t.age_from != null || t.age_to != null) return { from: t.age_from, to: t.age_to };
+  const m = t.age_label.match(/(\d+)\D+(\d+)/);
+  return m ? { from: Number(m[1]), to: Number(m[2]) } : { from: null, to: null };
 }
 interface ImgRow {
   key: number;
@@ -58,8 +68,10 @@ interface Row {
   name: string;
   duration: string;
   star: number;
+  variant: string;
   adult: number | null;
-  childAge: string;
+  childFrom: number | null;
+  childTo: number | null;
   child: number | null;
   moreChild: TierRow[];
   capacity: number | null;
@@ -78,8 +90,8 @@ interface Row {
   msg: string;
 }
 
-const COLS = 24;
-const PASTE_KEYS = ["name", "duration", "adult", "childAge", "child", "discount"] as const;
+const COLS = 27;
+const PASTE_KEYS = ["name", "duration", "adult", "childFrom", "childTo", "child", "discount"] as const;
 type PasteKey = (typeof PASTE_KEYS)[number];
 
 const MEAL_RE = { sang: /sáng|brunch/i, trua: /trưa/i, toi: /tối|tiệc/i } as const;
@@ -108,7 +120,7 @@ function detailSnap(r: Row): string {
     services: [...r.services].sort(),
     it: r.itinerary,
     note: r.note,
-    more: r.moreChild.map((t) => [t.age, t.price]),
+    more: r.moreChild.map((t) => [t.from, t.to, t.price]),
     url: r.url,
     imgs: r.images.map((i) => i.url ?? `new:${i.key}`),
     cabins: r.cabins.map((c) => [c.name, c.price]),
@@ -132,9 +144,11 @@ export function CruiseBulk({ mode, initial }: { mode: "edit" | "add"; initial: C
     duration: c.duration_label ?? "",
     star: c.star ?? 5,
     adult: c.price_adult,
-    childAge: c.child_prices[0]?.age_label ?? "",
+    variant: c.variant ?? defaultVariant(c.category),
+    childFrom: c.child_prices[0] ? tierAges(c.child_prices[0]).from : null,
+    childTo: c.child_prices[0] ? tierAges(c.child_prices[0]).to : null,
     child: c.child_prices[0] ? c.child_prices[0].price : c.price_child || null,
-    moreChild: c.child_prices.slice(1).map((t) => ({ key: nextKey(), age: t.age_label, price: t.price })),
+    moreChild: c.child_prices.slice(1).map((t) => ({ key: nextKey(), from: tierAges(t).from, to: tierAges(t).to, price: t.price })),
     capacity: c.capacity,
     cabinCount: c.cabin_count,
     url: c.itinerary_url ?? "",
@@ -157,7 +171,9 @@ export function CruiseBulk({ mode, initial }: { mode: "edit" | "add"; initial: C
     duration: "",
     star: 5,
     adult: null,
-    childAge: "",
+    variant: defaultVariant(category),
+    childFrom: null,
+    childTo: null,
     child: null,
     moreChild: [],
     capacity: null,
@@ -187,7 +203,7 @@ export function CruiseBulk({ mode, initial }: { mode: "edit" | "add"; initial: C
   const [cat, setCat] = useState<"" | CruiseCategory>("");
   const [search, setSearch] = useState("");
 
-  function mainDirty(r: Row, k: "category" | "name" | "duration" | "star" | "adult" | "childAge" | "child" | "capacity" | "cabinCount" | "discount"): boolean {
+  function mainDirty(r: Row, k: "category" | "name" | "duration" | "star" | "variant" | "adult" | "childFrom" | "childTo" | "child" | "capacity" | "cabinCount" | "discount"): boolean {
     if (!r.id) return false;
     const o = origin.get(r.id);
     return !!o && o[k] !== r[k];
@@ -201,7 +217,7 @@ export function CruiseBulk({ mode, initial }: { mode: "edit" | "add"; initial: C
     if (!r.id) return !isEmptyRow(r);
     const o = origin.get(r.id);
     if (!o) return false;
-    return (["category", "name", "duration", "star", "adult", "childAge", "child", "capacity", "cabinCount", "discount"] as const).some((k) => o[k] !== r[k]) || detailSnap(o) !== detailSnap(r);
+    return (["category", "name", "duration", "star", "variant", "adult", "childFrom", "childTo", "child", "capacity", "cabinCount", "discount"] as const).some((k) => o[k] !== r[k]) || detailSnap(o) !== detailSnap(r);
   }
 
   const dirtyCount = rows.filter(rowDirty).length;
@@ -234,7 +250,7 @@ export function CruiseBulk({ mode, initial }: { mode: "edit" | "add"; initial: C
   function changeCategory(r: Row, category: CruiseCategory) {
     // Đổi loại: nếu bữa ăn còn là mẫu cũ chưa chỉnh thì đổi theo mẫu của loại mới.
     const untouched = JSON.stringify(r.meals) === JSON.stringify(defaultMeals(r.category));
-    patch(r.key, { category, meals: untouched ? defaultMeals(category) : r.meals });
+    patch(r.key, { category, variant: defaultVariant(category), meals: untouched ? defaultMeals(category) : r.meals });
   }
 
   function onPasteTable(e: ClipboardEvent<HTMLTableElement>) {
@@ -256,7 +272,6 @@ export function CruiseBulk({ mode, initial }: { mode: "edit" | "add"; initial: C
           if (!k) return;
           if (k === "name") row.name = val;
           else if (k === "duration") row.duration = val;
-          else if (k === "childAge") row.childAge = val;
           else row[k] = parseNum(val);
         });
       });
@@ -369,8 +384,12 @@ export function CruiseBulk({ mode, initial }: { mode: "edit" | "add"; initial: C
         let ui = 0;
         for (const im of r.images) images.push({ url: im.file ? uploaded[ui++] : (im.url as string) });
         const childTiers = [
-          ...(r.child != null || r.childAge.trim() ? [{ age_label: r.childAge.trim() || "Trẻ em", price: r.child ?? 0 }] : []),
-          ...r.moreChild.filter((t) => t.age.trim()).map((t) => ({ age_label: t.age.trim(), price: t.price ?? 0 })),
+          ...(r.child != null || r.childFrom != null || r.childTo != null
+            ? [{ age_label: childAgeLabel(r.childFrom, r.childTo), age_from: r.childFrom, age_to: r.childTo, price: r.child ?? 0 }]
+            : []),
+          ...r.moreChild
+            .filter((t) => t.from != null || t.to != null || t.price != null)
+            .map((t) => ({ age_label: childAgeLabel(t.from, t.to), age_from: t.from, age_to: t.to, price: t.price ?? 0 })),
         ];
         const result = await postJson<{ id: string }>("/api/admin/bulk/cruises", {
           cruise: {
@@ -379,6 +398,7 @@ export function CruiseBulk({ mode, initial }: { mode: "edit" | "add"; initial: C
             name: r.name.trim(),
             duration_label: r.duration.trim() || null,
             star: r.star,
+            variant: r.variant,
             price_adult: r.adult ?? 0,
             price_child: r.child ?? 0,
             child_prices: childTiers,
@@ -466,9 +486,9 @@ export function CruiseBulk({ mode, initial }: { mode: "edit" | "add"; initial: C
       </div>
 
       <p className="mb-3 rounded-xl bg-teal-light px-3.5 py-2.5 text-[12.5px] leading-relaxed text-teal-dark">
-        Mỗi dòng là 1 du thuyền. <b>Tích sẵn bữa ăn và dịch vụ bao gồm</b> ngay trên bảng — tích <b>Trọn gói</b> là tự tích đủ các bữa theo lịch trình.
+        Mỗi dòng là 1 du thuyền. <b>Trong ngày có Day Cruise và Dinner Cruise → nhập 2 dòng cùng tên, khác "Phân loại"</b> (mỗi dòng có lịch trình + giá riêng, Sale sẽ thấy gộp 1 thẻ có 2 tab). Qua đêm chọn Vịnh Hạ Long / Lan Hạ. <b>Tích sẵn bữa ăn và dịch vụ bao gồm</b> ngay trên bảng — tích <b>Trọn gói</b> là tự tích đủ các bữa theo lịch trình.
         Bấm <b>Chi tiết</b> để thêm <b>ảnh</b>, thêm mốc tuổi trẻ em, link lịch trình, nhập lịch trình (mỗi dòng "giờ | nội dung"), giá từng hạng cabin (tour qua đêm), tuỳ chỉnh từng bữa ăn và <b>tải file lịch trình</b> lên (khi Sale tải xuống sẽ tự nén thành 1 file zip).
-        Dán từ Excel được 6 cột: Tên · Thời gian · Giá NL · Tuổi TE · Giá TE · CK% (đặt con trỏ ở ô Tên).
+        Dán từ Excel được 7 cột: Tên · Thời gian · Giá NL · TE từ · TE đến · Giá TE · CK% (đặt con trỏ ở ô Tên).
       </p>
 
       <div className="max-h-[68vh] overflow-auto rounded-2xl border border-border bg-white">
@@ -478,13 +498,15 @@ export function CruiseBulk({ mode, initial }: { mode: "edit" | "add"; initial: C
               <Th w={30} sticky={0}>#</Th>
               <Th w={210} sticky={30}>Tên du thuyền *</Th>
               <Th w={105}>Loại</Th>
+              <Th w={130}>Phân loại</Th>
               <Th w={100}>Thời gian</Th>
               <Th w={78}>Hạng sao</Th>
               <Th w={72} right>Số chỗ</Th>
               <Th w={72} right>Số cabin</Th>
               <Th w={115} right>Giá người lớn *</Th>
-              <Th w={110}>Trẻ em: độ tuổi</Th>
-              <Th w={105} right>Trẻ em: giá</Th>
+              <Th w={58} right>TE từ (tuổi)</Th>
+              <Th w={58} right>đến (tuổi)</Th>
+              <Th w={105} right>Giá trẻ em</Th>
               <Th w={72} right>CK %</Th>
               <Th w={54} className="text-center">Ăn sáng</Th>
               <Th w={54} className="text-center">Ăn trưa</Th>
@@ -517,6 +539,9 @@ export function CruiseBulk({ mode, initial }: { mode: "edit" | "add"; initial: C
                     <Td dirty={mainDirty(r, "category")}>
                       <SelectCell value={r.category} options={[{ value: "day" as const, label: "Trong ngày" }, { value: "night" as const, label: "Qua đêm" }]} onChange={(v) => changeCategory(r, v)} />
                     </Td>
+                    <Td dirty={mainDirty(r, "variant")}>
+                      <SelectCell value={r.variant} options={CRUISE_VARIANTS[r.category].map((v) => ({ value: v.key, label: v.label }))} onChange={(v) => patch(r.key, { variant: v })} />
+                    </Td>
                     <Td dirty={mainDirty(r, "duration")}>
                       <div data-key={r.key} data-paste="duration"><TextCell value={r.duration} onChange={(v) => patch(r.key, { duration: v })} placeholder="VD: 2N1Đ" /></div>
                     </Td>
@@ -532,8 +557,11 @@ export function CruiseBulk({ mode, initial }: { mode: "edit" | "add"; initial: C
                     <Td err={r.err.adult} dirty={mainDirty(r, "adult")}>
                       <div data-key={r.key} data-paste="adult"><NumCell value={r.adult} col="adult" onChange={(v) => { patch(r.key, { adult: v }); clearErr(r.key, "adult"); }} /></div>
                     </Td>
-                    <Td dirty={mainDirty(r, "childAge")}>
-                      <div data-key={r.key} data-paste="childAge"><TextCell value={r.childAge} onChange={(v) => patch(r.key, { childAge: v })} placeholder="VD: 5-9 tuổi" /></div>
+                    <Td dirty={mainDirty(r, "childFrom")}>
+                      <div data-key={r.key} data-paste="childFrom"><NumCell value={r.childFrom} col="childFrom" placeholder="5" onChange={(v) => patch(r.key, { childFrom: v })} /></div>
+                    </Td>
+                    <Td dirty={mainDirty(r, "childTo")}>
+                      <div data-key={r.key} data-paste="childTo"><NumCell value={r.childTo} col="childTo" placeholder="9" onChange={(v) => patch(r.key, { childTo: v })} /></div>
                     </Td>
                     <Td dirty={mainDirty(r, "child")}>
                       <div data-key={r.key} data-paste="child"><NumCell value={r.child} col="child" onChange={(v) => patch(r.key, { child: v })} /></div>
@@ -627,18 +655,22 @@ export function CruiseBulk({ mode, initial }: { mode: "edit" | "add"; initial: C
                         )}
 
                         <div className="mt-4">
-                          <p className="mb-1.5 text-[11px] font-bold text-ink-muted">GIÁ TRẺ EM THEO ĐỘ TUỔI (mốc 1 nhập ngay trên bảng; thêm mốc khác ở đây)</p>
-                          <div className="max-w-md space-y-1.5">
+                          <p className="mb-1.5 text-[11px] font-bold text-ink-muted">GIÁ TRẺ EM: "từ … đến … tuổi: giá" (mốc 1 nhập ngay trên bảng; thêm mốc khác ở đây)</p>
+                          <div className="max-w-xl space-y-1.5">
                             {r.moreChild.map((t) => (
                               <div key={t.key} className="flex items-center gap-2">
-                                <input value={t.age} onChange={(e) => update(r.key, (x) => ({ moreChild: x.moreChild.map((y) => (y.key === t.key ? { ...y, age: e.target.value } : y)) }))} placeholder="VD: 10-14 tuổi" className="h-8 flex-1 rounded-md border border-border bg-white px-2 text-[12px]" />
-                                <div className="w-36"><SimpleNum value={t.price} onChange={(v) => update(r.key, (x) => ({ moreChild: x.moreChild.map((y) => (y.key === t.key ? { ...y, price: v } : y)) }))} placeholder="Giá" /></div>
+                                <span className="text-[12px] text-ink-muted">Giá trẻ em từ</span>
+                                <div className="w-14"><SimpleNum value={t.from} onChange={(v) => update(r.key, (x) => ({ moreChild: x.moreChild.map((y) => (y.key === t.key ? { ...y, from: v } : y)) }))} placeholder="10" /></div>
+                                <span className="text-[12px] text-ink-muted">đến</span>
+                                <div className="w-14"><SimpleNum value={t.to} onChange={(v) => update(r.key, (x) => ({ moreChild: x.moreChild.map((y) => (y.key === t.key ? { ...y, to: v } : y)) }))} placeholder="14" /></div>
+                                <span className="text-[12px] text-ink-muted">tuổi:</span>
+                                <div className="w-32"><SimpleNum value={t.price} onChange={(v) => update(r.key, (x) => ({ moreChild: x.moreChild.map((y) => (y.key === t.key ? { ...y, price: v } : y)) }))} placeholder="Giá" /></div>
                                 <button type="button" onClick={() => update(r.key, (x) => ({ moreChild: x.moreChild.filter((y) => y.key !== t.key) }))} className="px-1 font-bold text-danger">✕</button>
                               </div>
                             ))}
                           </div>
                           <div className="mt-2">
-                            <MiniBtn onClick={() => update(r.key, (x) => ({ moreChild: [...x.moreChild, { key: nextKey(), age: "", price: null }] }))}>+ Thêm mốc tuổi</MiniBtn>
+                            <MiniBtn onClick={() => update(r.key, (x) => ({ moreChild: [...x.moreChild, { key: nextKey(), from: null, to: null, price: null }] }))}>+ Thêm mốc tuổi</MiniBtn>
                           </div>
                         </div>
 

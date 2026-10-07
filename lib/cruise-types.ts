@@ -36,7 +36,42 @@ export interface CruiseCabin {
 export interface CruiseChildPrice {
   id?: string;
   age_label: string;
+  age_from: number | null;
+  age_to: number | null;
   price: number;
+}
+
+/** Phân loại: trong ngày = Day Cruise / Dinner Cruise; qua đêm = Vịnh Hạ Long / Vịnh Lan Hạ. */
+export const CRUISE_VARIANTS: Record<CruiseCategory, { key: string; label: string }[]> = {
+  day: [
+    { key: "day_cruise", label: "Day Cruise" },
+    { key: "dinner_cruise", label: "Dinner Cruise" },
+  ],
+  night: [
+    { key: "ha_long", label: "Vịnh Hạ Long" },
+    { key: "lan_ha", label: "Vịnh Lan Hạ" },
+  ],
+};
+
+export function defaultVariant(category: CruiseCategory): string {
+  return CRUISE_VARIANTS[category][0].key;
+}
+
+export function variantLabel(v: string | null | undefined): string {
+  if (!v) return "";
+  for (const list of Object.values(CRUISE_VARIANTS)) {
+    const f = list.find((x) => x.key === v);
+    if (f) return f.label;
+  }
+  return "";
+}
+
+/** "từ 5 đến 9 tuổi" */
+export function childAgeLabel(from: number | null, to: number | null): string {
+  if (from != null && to != null) return from === to ? `${from} tuổi` : `${from}–${to} tuổi`;
+  if (from != null) return `từ ${from} tuổi`;
+  if (to != null) return `dưới ${to + 1} tuổi`;
+  return "Trẻ em";
 }
 
 export interface CruiseImage {
@@ -60,6 +95,7 @@ export interface Cruise {
   name: string;
   duration_label: string | null;
   star: number | null;
+  variant: string | null;
   price_adult: number;
   price_child: number;
   discount_percent: number;
@@ -150,7 +186,7 @@ const vnd = (n: number) => new Intl.NumberFormat("vi-VN").format(n);
 export function cruiseQuoteText(c: Cruise): string {
   const lines: string[] = [];
   lines.push(c.name);
-  lines.push(`${c.duration_label ?? CRUISE_CATEGORY_LABEL[c.category]}${c.star ? ` · ${c.star} sao` : ""}`);
+  lines.push(`${variantLabel(c.variant) ? `${variantLabel(c.variant)} · ` : ""}${c.duration_label ?? CRUISE_CATEGORY_LABEL[c.category]}${c.star ? ` · ${c.star} sao` : ""}`);
   const adult = priceAfterPercent(c.price_adult, c.discount_percent);
   lines.push(`Giá người lớn: ${vnd(adult)}đ${c.discount_percent ? ` (đã chiết khấu ${c.discount_percent}%)` : ""}`);
   c.child_prices.forEach((x) => lines.push(`Trẻ em ${x.age_label}: ${vnd(priceAfterPercent(x.price, c.discount_percent))}đ`));
