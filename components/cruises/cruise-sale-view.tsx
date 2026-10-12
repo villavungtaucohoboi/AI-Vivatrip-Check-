@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Check, ChevronDown, Download, ImageIcon, Link2, Loader2, Share2, X } from "lucide-react";
+import { ArrowDownUp, Check, ChevronDown, Clock, Download, Eye, ImageIcon, Link2, Loader2, Search, Share2, Star, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,33 @@ import {
 function shortVND(n: number): string {
   if (n >= 1000 && n % 1000 === 0) return `${new Intl.NumberFormat("vi-VN").format(n / 1000)}k`;
   return formatVND(n);
+}
+
+/** Bỏ dấu để tìm tên không phân biệt dấu: "catherine" khớp "Catherine". */
+function plain(text: string): string {
+  return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/gi, "d").toLowerCase().trim();
+}
+
+type SortMode = "default" | "asc" | "desc";
+
+/** Các phần thông tin Sale có thể ẩn/hiện trên thẻ (nhớ theo từng máy). */
+const VISIBLE_FIELDS = [
+  { key: "info", label: "Giờ · sao · sức chứa" },
+  { key: "child", label: "Giá trẻ em" },
+  { key: "cabin", label: "Hạng cabin" },
+  { key: "meal", label: "Ăn uống" },
+] as const;
+type FieldKey = (typeof VISIBLE_FIELDS)[number]["key"];
+const FIELDS_STORAGE_KEY = "vt-cruise-visible-fields";
+const ALL_FIELDS: Record<FieldKey, boolean> = { info: true, child: true, cabin: true, meal: false };
+
+function Stars({ n }: { n: number }) {
+  return (
+    <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-50 px-1.5 py-0.5 text-[11px] font-bold text-amber-700 ring-1 ring-amber-200">
+      {n}
+      <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+    </span>
+  );
 }
 
 function Section({ title, hint, defaultOpen, children }: { title: string; hint?: string; defaultOpen?: boolean; children: React.ReactNode }) {
@@ -72,7 +99,6 @@ async function copyText(text: string) {
 }
 
 export function CruiseSaleView({ cruises, single = false }: { cruises: Cruise[]; single?: boolean }) {
-  const [star, setStar] = useState<number | null>(null);
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [bay, setBay] = useState<string | null>(null);
   const [tab, setTab] = useState<Record<string, string>>({});
@@ -84,13 +110,53 @@ export function CruiseSaleView({ cruises, single = false }: { cruises: Cruise[];
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [zipping, setZipping] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [stars, setStars] = useState<Set<number>>(new Set());
+  const [sort, setSort] = useState<SortMode>("default");
+  const [q, setQ] = useState("");
+  const [fields, setFields] = useState<Record<FieldKey, boolean>>(ALL_FIELDS);
+  const [showFieldPicker, setShowFieldPicker] = useState(false);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(FIELDS_STORAGE_KEY);
+      if (raw) setFields({ ...ALL_FIELDS, ...JSON.parse(raw) });
+    } catch {
+      // trình duyệt chặn lưu trữ → dùng mặc định
+    }
+  }, []);
+  function toggleField(k: FieldKey) {
+    setFields((prev) => {
+      const next = { ...prev, [k]: !prev[k] };
+      try {
+        localStorage.setItem(FIELDS_STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        // bỏ qua
+      }
+      return next;
+    });
+  }
+  function toggleStar(n: number) {
+    setStars((prev) => {
+      const next = new Set(prev);
+      if (next.has(n)) next.delete(n);
+      else next.add(n);
+      return next;
+    });
+  }
 
   const counts = useMemo(
     () => ({ day: new Set(cruises.filter((c) => c.category === "day").map((c) => c.name.trim().toLowerCase())).size, night: cruises.filter((c) => c.category === "night").length }),
     [cruises]
   );
   const inCat = single ? cruises : cruises.filter((c) => c.category === cat);
-  const filtered = single ? cruises : inCat.filter((c) => (star === null || c.star === star) && (cat !== "night" || bay === null || c.variant === bay));
+  const nq = plain(q);
+  const filtered = single
+    ? cruises
+    : inCat.filter(
+        (c) =>
+          (stars.size === 0 || (c.star != null && stars.has(c.star))) &&
+          (cat !== "night" || bay === null || c.variant === bay) &&
+          (!nq || plain(c.name).includes(nq))
+      );
   // Trong ngày: các dòng cùng tên (Day Cruise / Dinner Cruise) gộp thành 1 thẻ có tab.
   const groups = useMemo(() => {
     const map = new Map<string, Cruise[]>();
@@ -99,14 +165,22 @@ export function CruiseSaleView({ cruises, single = false }: { cruises: Cruise[];
       map.set(key, [...(map.get(key) ?? []), c]);
     }
     const order = CRUISE_VARIANTS.day.map((v) => v.key);
-    return Array.from(map.entries()).map(([key, rows]) => ({
+    const out = Array.from(map.entries()).map(([key, rows]) => ({
       key,
       rows: [...rows].sort((a, b) => order.indexOf(a.variant ?? "") - order.indexOf(b.variant ?? "")),
     }));
-  }, [filtered, single]);
+    if (sort !== "default") {
+      // Giá dùng để sắp xếp = giá người lớn (sau CK) thấp nhất trong nhóm
+      const price = (g: { rows: Cruise[] }) => Math.min(...g.rows.map((r) => priceAfterPercent(r.price_adult, r.discount_percent)));
+      out.sort((a, b) => (sort === "asc" ? price(a) - price(b) : price(b) - price(a)));
+    }
+    return out;
+  }, [filtered, single, sort]);
   const list = groups;
   const baysPresent = CRUISE_VARIANTS.night.filter((v) => cruises.some((c) => c.category === "night" && c.variant === v.key));
-  const starsPresent = CRUISE_STARS.filter((n) => cruises.some((c) => c.category === cat && c.star === n));
+  // Luôn hiện 4★ 5★ 6★ (và 3★ nếu có tàu 3 sao) để Sale lọc nhanh
+  const starsShown = CRUISE_STARS.filter((n) => n >= 4 || cruises.some((c) => c.category === cat && c.star === n));
+  const countStar = (n: number) => cruises.filter((c) => c.category === cat && c.star === n).length;
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -213,8 +287,8 @@ export function CruiseSaleView({ cruises, single = false }: { cruises: Cruise[];
         {(["day", "night"] as const).map((c) => (
           <button
             key={c}
-            onClick={() => { setCat(c); setStar(null); setBay(null); }}
-            className={`rounded-xl px-4 py-2.5 text-[13px] font-bold ${cat === c ? "bg-teal text-white" : "border border-border bg-white text-ink-muted hover:bg-paper-dim"}`}
+            onClick={() => { setCat(c); setStars(new Set()); setBay(null); }}
+            className={`rounded-xl px-4 py-2.5 text-[13px] font-bold transition ${cat === c ? "bg-gradient-to-r from-teal-dark to-teal text-white shadow-md" : "border border-border bg-white text-ink-muted hover:bg-paper-dim"}`}
           >
             {CRUISE_CATEGORY_LABEL[c]} <span className="opacity-70">({counts[c]})</span>
           </button>
@@ -246,18 +320,95 @@ export function CruiseSaleView({ cruises, single = false }: { cruises: Cruise[];
         </div>
       )}
 
-      {!single && starsPresent.length > 0 && (
-        <div className="-mx-4 mt-2 flex items-center gap-1.5 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          <span className="shrink-0 text-[11.5px] font-bold text-ink-muted">Hạng sao:</span>
-          {[null, ...starsPresent].map((n) => (
+      {!single && (
+        <div className="mt-3 space-y-2">
+          {/* Tìm theo tên */}
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Tìm tên du thuyền… (VD: catherine, ambassador)"
+              className="h-10 w-full rounded-xl border border-border bg-white pl-9 pr-9 text-[13.5px] text-ink outline-none placeholder:text-ink-muted/70 focus:border-teal focus:ring-2 focus:ring-teal/20"
+            />
+            {q && (
+              <button type="button" onClick={() => setQ("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-1 text-ink-muted hover:bg-paper-dim" aria-label="Xoá">
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+
+          {/* Hạng sao (chọn nhiều) */}
+          <div className="-mx-4 flex items-center gap-1.5 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <span className="shrink-0 text-[11.5px] font-bold text-ink-muted">Hạng sao:</span>
             <button
-              key={n ?? "all"}
-              onClick={() => setStar(n)}
-              className={`shrink-0 rounded-full px-3 py-1.5 text-[12px] font-bold ${star === n ? "bg-teal-dark text-white" : "border border-border bg-white text-ink-muted hover:bg-paper-dim"}`}
+              onClick={() => setStars(new Set())}
+              className={`shrink-0 rounded-full px-3 py-1.5 text-[12px] font-bold ${stars.size === 0 ? "bg-teal-dark text-white" : "border border-border bg-white text-ink-muted"}`}
             >
-              {n === null ? "Tất cả" : `${n} sao`}
+              Tất cả
             </button>
-          ))}
+            {starsShown.map((n) => {
+              const on = stars.has(n);
+              const cnt = countStar(n);
+              return (
+                <button
+                  key={n}
+                  onClick={() => toggleStar(n)}
+                  disabled={cnt === 0}
+                  className={`flex shrink-0 items-center gap-1 rounded-full px-3 py-1.5 text-[12px] font-bold disabled:opacity-40 ${
+                    on ? "bg-amber-500 text-white shadow-sm" : "border border-amber-200 bg-amber-50 text-amber-800"
+                  }`}
+                >
+                  {n}
+                  <Star className={`h-3 w-3 ${on ? "fill-white text-white" : "fill-amber-400 text-amber-400"}`} />
+                  <span className="opacity-70">({cnt})</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Sắp xếp giá + ẩn/hiện thông tin */}
+          <div className="-mx-4 flex items-center gap-1.5 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <ArrowDownUp className="h-3.5 w-3.5 shrink-0 text-ink-muted" />
+            {(
+              [
+                ["default", "Mặc định"],
+                ["asc", "Giá thấp → cao"],
+                ["desc", "Giá cao → thấp"],
+              ] as const
+            ).map(([k, label]) => (
+              <button
+                key={k}
+                onClick={() => setSort(k)}
+                className={`shrink-0 rounded-full px-3 py-1.5 text-[12px] font-bold ${sort === k ? "bg-teal-dark text-white" : "border border-border bg-white text-ink-muted"}`}
+              >
+                {label}
+              </button>
+            ))}
+            <button
+              onClick={() => setShowFieldPicker((v) => !v)}
+              className={`ml-auto flex shrink-0 items-center gap-1 rounded-full px-3 py-1.5 text-[12px] font-bold ${showFieldPicker ? "bg-ink text-white" : "border border-border bg-white text-ink-muted"}`}
+            >
+              <Eye className="h-3.5 w-3.5" /> Ẩn/hiện
+            </button>
+          </div>
+          {showFieldPicker && (
+            <div className="flex flex-wrap gap-1.5 rounded-xl border border-border bg-white p-2">
+              {VISIBLE_FIELDS.map((f) => (
+                <button
+                  key={f.key}
+                  onClick={() => toggleField(f.key)}
+                  className={`flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[12px] font-semibold ${fields[f.key] ? "bg-teal-light text-teal-dark" : "bg-paper-dim text-ink-muted line-through"}`}
+                >
+                  {fields[f.key] && <Check className="h-3.5 w-3.5" />}
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          )}
+          {(q || stars.size > 0) && (
+            <p className="text-[12px] text-ink-muted">Tìm thấy <b className="text-ink">{list.length}</b> du thuyền</p>
+          )}
         </div>
       )}
 
@@ -274,21 +425,26 @@ export function CruiseSaleView({ cruises, single = false }: { cruises: Cruise[];
               const adult = priceAfterPercent(c.price_adult, c.discount_percent);
               const imgs = (c.images.length ? c.images : g.rows.flatMap((r) => r.images)).map((i) => i.url);
               return (
-                <Card key={g.key} className="overflow-hidden">
-                  <div className="flex gap-2.5 p-2.5">
-                    <div className="relative h-[92px] w-[92px] shrink-0 overflow-hidden rounded-xl bg-gradient-to-br from-teal-dark to-teal">
+                <Card key={g.key} className="overflow-hidden transition-shadow hover:shadow-float">
+                  <div className="flex gap-3 p-3">
+                    <div className="relative h-[104px] w-[104px] shrink-0 overflow-hidden rounded-xl bg-gradient-to-br from-teal-dark to-teal">
                       {imgs.length > 0 && (
                         <button type="button" onClick={() => setLightbox({ images: imgs, index: 0 })} className="absolute inset-0 block" aria-label="Xem ảnh">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img src={imgs[0]} alt={c.name} loading="lazy" className="h-full w-full object-cover" />
-                          <span className="absolute bottom-1 left-1 rounded-full bg-black/60 px-1.5 py-0.5 text-[10px] font-bold text-white">{imgs.length} ảnh</span>
+                          <span className="absolute bottom-1 left-1 flex items-center gap-0.5 rounded-full bg-black/60 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                            <ImageIcon className="h-2.5 w-2.5" /> {imgs.length}
+                          </span>
                         </button>
+                      )}
+                      {c.discount_percent > 0 && (
+                        <span className="absolute right-1 top-1 rounded-md bg-coral px-1.5 py-0.5 text-[10.5px] font-extrabold text-white shadow">-{c.discount_percent}%</span>
                       )}
                     </div>
 
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-1.5">
-                        <p className="truncate text-[14.5px] font-bold text-ink">{c.name}</p>
+                        <p className="line-clamp-2 text-[15px] font-extrabold leading-snug text-ink">{c.name}</p>
                         {!single && (
                           <input type="checkbox" checked={selected.has(c.id)} onChange={() => toggle(c.id)} aria-label="Chọn để tải gộp" className="mt-0.5 h-[18px] w-[18px] shrink-0 accent-[#0E6B5A]" />
                         )}
@@ -300,65 +456,83 @@ export function CruiseSaleView({ cruises, single = false }: { cruises: Cruise[];
                               key={r.id}
                               type="button"
                               onClick={() => setTab((p) => ({ ...p, [g.key]: r.id }))}
-                              className={`rounded-md px-2.5 py-1 text-[11.5px] font-bold ${r.id === c.id ? "bg-white text-teal-dark shadow-sm" : "text-ink-muted"}`}
+                              className={`whitespace-nowrap rounded-md px-2 py-0.5 text-[11.5px] font-bold ${r.id === c.id ? "bg-white text-teal-dark shadow-sm" : "text-ink-muted"}`}
                             >
                               {variantLabel(r.variant) || "Tiêu chuẩn"}
                             </button>
                           ))}
                         </div>
                       )}
-                      <p className="text-[11.5px] text-ink-muted">
-                        {variantLabel(c.variant) && c.category === "night" ? `${variantLabel(c.variant)} · ` : ""}
-                        {c.duration_label ? `${c.duration_label} · ` : ""}
-                        {c.star ? `${c.star} sao` : CRUISE_CATEGORY_LABEL[c.category]}
-                        {c.capacity ? ` · ${c.capacity} chỗ` : ""}
-                        {c.cabin_count ? ` · ${c.cabin_count} cabin` : ""}
-                      </p>
-                      <p className="mt-0.5 text-[17px] font-extrabold leading-tight text-teal-dark">
-                        {formatVND(adult)} <span className="text-[10.5px] font-medium text-ink-muted">/ người lớn</span>
-                        {c.discount_percent > 0 && <span className="ml-1.5 rounded-full bg-sand-light px-1.5 py-0.5 align-middle text-[10px] font-bold text-sand-dark">CK {c.discount_percent}%</span>}
-                      </p>
-                      {c.child_prices.length > 0 && (
-                        <p className="text-[11.5px] leading-snug text-ink-muted">
-                          {c.child_prices.map((t, ti) => (
-                            <span key={ti}>
-                              {ti > 0 && " · "}TE {t.age_label}: <b className="text-ink">{shortVND(priceAfterPercent(t.price, c.discount_percent))}</b>
+                      {fields.info && (
+                        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-ink-muted">
+                          {c.star ? <Stars n={c.star} /> : <span>{CRUISE_CATEGORY_LABEL[c.category]}</span>}
+                          {variantLabel(c.variant) && c.category === "night" && <span className="font-semibold text-teal">{variantLabel(c.variant)}</span>}
+                          {c.duration_label && (
+                            <span className="flex items-center gap-0.5"><Clock className="h-3 w-3" />{c.duration_label}</span>
+                          )}
+                          {(c.capacity || c.cabin_count) && (
+                            <span className="flex items-center gap-0.5">
+                              <Users className="h-3 w-3" />
+                              {[c.capacity ? `${c.capacity} chỗ` : "", c.cabin_count ? `${c.cabin_count} cabin` : ""].filter(Boolean).join(" · ")}
                             </span>
-                          ))}
-                        </p>
+                          )}
+                        </div>
                       )}
+                      <div className="mt-1.5 flex flex-wrap items-baseline gap-x-1.5">
+                        <span className="text-[19px] font-extrabold leading-none tracking-tight text-hot tabular-price">{formatVND(adult)}</span>
+                        <span className="text-[10.5px] font-medium text-ink-muted">/ người lớn</span>
+                        {c.discount_percent > 0 && (
+                          <span className="text-[11px] text-ink-muted/80 line-through tabular-price">{formatVND(c.price_adult)}</span>
+                        )}
+                      </div>
                     </div>
                   </div>
 
-                  {c.cabins.length > 0 && (
-                    <div className="mx-2.5 mb-2 flex flex-wrap gap-x-3 gap-y-0.5 rounded-lg bg-paper-dim px-2.5 py-1.5 text-[11.5px]">
-                      {c.cabins.map((x) => (
-                        <span key={x.id} className="text-ink-muted">
-                          {x.name}: <b className="text-teal-dark">{shortVND(priceAfterPercent(x.price, c.discount_percent))}</b>
+                  {fields.child && c.child_prices.length > 0 && (
+                    <div className="mx-3 mb-2 flex flex-wrap gap-1">
+                      {c.child_prices.map((t, ti) => (
+                        <span key={ti} className="rounded-lg bg-sky-50 px-2 py-1 text-[11.5px] text-sky-800 ring-1 ring-sky-100">
+                          TE {t.age_label}: <b>{priceAfterPercent(t.price, c.discount_percent) === 0 ? "Miễn phí" : shortVND(priceAfterPercent(t.price, c.discount_percent))}</b>
                         </span>
                       ))}
                     </div>
                   )}
 
+                  {fields.cabin && c.cabins.length > 0 && (
+                    <div className="mx-3 mb-2 flex flex-wrap gap-1">
+                      {c.cabins.map((x) => (
+                        <span key={x.id} className="rounded-lg bg-teal-light px-2 py-1 text-[11.5px] text-teal-dark">
+                          {x.name}: <b>{shortVND(priceAfterPercent(x.price, c.discount_percent))}</b>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {fields.meal && (
+                    <p className="mx-3 mb-2 text-[11.5px] font-medium text-ink">
+                      🍽 {meal.full ? `Trọn gói các bữa${c.meals.length > 1 ? ` (${c.meals.length} bữa)` : ""}` : meal.on.length ? meal.on.join(" · ") : "Không gồm bữa ăn"}
+                    </p>
+                  )}
+
                   {single ? null : (
-                    <div className="flex gap-1.5 px-2.5 pb-2.5">
-                      <button type="button" onClick={() => handleCopy(c)} className="flex h-9 flex-1 items-center justify-center gap-1 rounded-xl bg-teal text-[12px] font-bold text-white">
+                    <div className="flex gap-1.5 px-3 pb-3">
+                      <button type="button" onClick={() => handleCopy(c)} className="flex h-9 flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-xl bg-gradient-to-r from-teal-dark to-teal text-[12px] font-bold text-white shadow-sm">
                         {copiedId === c.id ? <Check className="h-3.5 w-3.5" /> : <Link2 className="h-3.5 w-3.5" />}
                         Link
                       </button>
                       {imgs.length > 0 && (
-                        <button type="button" disabled={imgBusy !== null} onClick={() => handleCopyImages(c.id, imgs)} className="flex h-9 flex-1 items-center justify-center gap-1 rounded-xl border border-border bg-white text-[12px] font-bold text-teal-dark disabled:opacity-60">
+                        <button type="button" disabled={imgBusy !== null} onClick={() => handleCopyImages(c.id, imgs)} className="flex h-9 flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-xl border border-border bg-white text-[12px] font-bold text-teal-dark disabled:opacity-60">
                           {imgBusy === `c${c.id}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImageIcon className="h-3.5 w-3.5" />}
-                          Copy ảnh
+                          Ảnh
                         </button>
                       )}
                       {imgs.length > 0 && canShare && (
-                        <button type="button" disabled={imgBusy !== null} onClick={() => handleShareImages(c.id, c.name, imgs)} className="flex h-9 flex-1 items-center justify-center gap-1 rounded-xl border border-border bg-white text-[12px] font-bold text-teal-dark disabled:opacity-60">
+                        <button type="button" disabled={imgBusy !== null} onClick={() => handleShareImages(c.id, c.name, imgs)} className="flex h-9 flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-xl border border-sky-200 bg-sky-50 text-[12px] font-bold text-sky-700 disabled:opacity-60">
                           {imgBusy === `s${c.id}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Share2 className="h-3.5 w-3.5" />}
                           Zalo
                         </button>
                       )}
-                      <button type="button" onClick={() => setOpen((p) => ({ ...p, [g.key]: !p[g.key] }))} className="flex h-9 w-[84px] shrink-0 items-center justify-center gap-0.5 rounded-xl border border-border bg-white text-[12px] font-bold text-ink-muted">
+                      <button type="button" onClick={() => setOpen((p) => ({ ...p, [g.key]: !p[g.key] }))} className="flex h-9 shrink-0 items-center justify-center gap-0.5 whitespace-nowrap rounded-xl border border-border bg-white px-2.5 text-[12px] font-bold text-ink-muted">
                         {open[g.key] ? "Thu gọn" : "Chi tiết"}
                         <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open[g.key] ? "rotate-180" : ""}`} />
                       </button>

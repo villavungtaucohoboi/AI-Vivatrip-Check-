@@ -35,6 +35,7 @@ function shortMoney(amount: number | null | undefined): string {
     const txt = Number.isInteger(tr) ? String(tr) : (Math.round(tr * 100) / 100).toString().replace(".", ",");
     return `${txt}tr`;
   }
+  if (amount >= 1000 && amount % 1000 === 0) return `${amount / 1000}k`;
   return new Intl.NumberFormat("vi-VN").format(amount) + "đ";
 }
 
@@ -92,13 +93,13 @@ function PriceBlock({
             >
               <span
                 className={cn(
-                  "w-[46px] lg:w-[58px] shrink-0 text-[10.5px] lg:text-[12px] font-semibold",
+                  "shrink-0 whitespace-nowrap text-[10.5px] lg:text-[12px] font-semibold",
                   isHot ? "text-hot" : "text-ink-muted"
                 )}
               >
                 {TIER_LABEL_SHORT[tier]}
               </span>
-              <span className="flex min-w-0 flex-1 items-baseline justify-end gap-1 tabular-price">
+              <span className="flex min-w-0 flex-1 items-baseline justify-end gap-1 overflow-hidden whitespace-nowrap tabular-price">
                 {hasDiscount && (
                   <span className="hidden sm:inline text-[10px] lg:text-[11px] text-ink-muted/80 line-through">
                     {shortMoney(base)}
@@ -114,7 +115,7 @@ function PriceBlock({
                 </span>
               </span>
               {hasDiscount ? (
-                <span className="shrink-0 rounded-md bg-coral px-1 py-0.5 text-[9px] lg:text-[10.5px] font-bold leading-none text-white">
+                <span className="shrink-0 whitespace-nowrap rounded-md bg-coral px-1 py-0.5 text-[9px] lg:text-[10.5px] font-bold leading-none text-white">
                   -{discount.type === "amount" ? shortMoney(discount.value) : formatDiscount(discount.type, discount.value)}
                 </span>
               ) : (
