@@ -358,6 +358,7 @@ export function SearchExperience({
                     matchLabel={i === 0 ? "Phù hợp nhất" : `Lựa chọn ${i + 1}`}
                     reason={product._reason}
                     requestedGuests={resolvedFilters.guests}
+                    highlightTiers={resolvedFilters.dayTiers}
                   />
                 ))}
               </div>
@@ -374,7 +375,7 @@ export function SearchExperience({
               <p className="mb-2.5 text-[13px] text-ink-muted">
                 Đang hiển thị {results.length} / {total} sản phẩm phù hợp nhất
               </p>
-              <ProductGrid products={rest} requestedGuests={resolvedFilters.guests} />
+              <ProductGrid products={rest} requestedGuests={resolvedFilters.guests} highlightTiers={resolvedFilters.dayTiers} />
             </div>
           )}
 

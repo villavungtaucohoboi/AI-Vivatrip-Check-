@@ -3,10 +3,11 @@ import { BedDouble, MapPin, Users, Waves, Music2, Flame, Home, Droplet, Dumbbell
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ProductImage } from "@/components/product-image";
-import { formatVND, formatVNDShort } from "@/lib/format";
-import { formatDateVN, formatDiscount, TIER_LABEL_SHORT } from "@/lib/pricing";
+import { formatVND } from "@/lib/format";
+import { cn } from "@/lib/utils";
+import { calculateDiscount, formatDateVN, formatDiscount, getDiscountForTier, TIER_LABEL_SHORT } from "@/lib/pricing";
 import { calcGuestPricing } from "@/lib/capacity";
-import { PRODUCT_TYPE_LABEL, type DatePricingContext, type Product } from "@/lib/types";
+import { PRODUCT_TYPE_LABEL, type DatePricingContext, type PriceTier, type Product } from "@/lib/types";
 
 const AMENITY_ICONS = [
   { key: "pool" as const, label: "Hồ bơi", Icon: Waves },
@@ -18,70 +19,125 @@ const AMENITY_ICONS = [
   { key: "pickleball" as const, label: "Pickleball", Icon: Dumbbell },
 ];
 
-function PriceBlock({ product, requestedGuests }: { product: Product & { _pricing?: DatePricingContext }; requestedGuests?: number }) {
+const TIERS: PriceTier[] = ["weekday", "friday_sunday", "saturday_holiday"];
+
+const TIER_BASE_FIELD = {
+  weekday: "price_weekday",
+  friday_sunday: "price_friday_sunday",
+  saturday_holiday: "price_saturday_holiday",
+} as const;
+
+/** "16 triệu" → "16tr", "9.5 triệu" → "9,5tr" — gọn cho thẻ trên điện thoại */
+function shortMoney(amount: number | null | undefined): string {
+  if (amount == null) return "Liên hệ";
+  if (amount >= 1_000_000) {
+    const tr = amount / 1_000_000;
+    const txt = Number.isInteger(tr) ? String(tr) : (Math.round(tr * 100) / 100).toString().replace(".", ",");
+    return `${txt}tr`;
+  }
+  return new Intl.NumberFormat("vi-VN").format(amount) + "đ";
+}
+
+function PriceBlock({
+  product,
+  requestedGuests,
+  highlightTiers,
+}: {
+  product: Product & { _pricing?: DatePricingContext };
+  requestedGuests?: number;
+  highlightTiers?: PriceTier[];
+}) {
   if (product.type === "hotel") {
     return (
       <div>
-        <p className="text-[14px] lg:text-[19px] font-bold leading-none tracking-tight text-teal-dark">
+        <p className="text-[15px] lg:text-[20px] font-extrabold leading-none tracking-tight text-teal-dark tabular-price">
           {formatVND(product.price)}
         </p>
-        <p className="mt-1 text-[10px] lg:text-[11px] text-ink-muted">giá thấp nhất/đêm</p>
+        <p className="mt-1 text-[10.5px] lg:text-[12px] text-ink-muted">giá thấp nhất/đêm</p>
       </div>
     );
   }
 
   const ctx = product._pricing;
+  // Dòng cần tô đỏ: có ngày cụ thể → đúng khung của ngày đó;
+  // không có ngày nhưng khách nói "cuối tuần"/"ngày thường"... → các khung đó.
+  const hot = new Set<PriceTier>(ctx ? [ctx.tier] : highlightTiers ?? []);
 
-  // Có ngày cụ thể — hiển thị đúng 1 giá của ngày đó, không hiện giá weekday
-  if (ctx && ctx.basePrice != null) {
-    const hasDiscount = ctx.discountValue > 0 && ctx.finalPrice != null;
-    const dayPrice = hasDiscount ? ctx.finalPrice! : ctx.basePrice;
-    const guestPricing = requestedGuests ? calcGuestPricing(product, requestedGuests, dayPrice) : null;
+  const rows = TIERS.map((tier) => {
+    const base = product[TIER_BASE_FIELD[tier]] ?? null;
+    const discount = getDiscountForTier(product, tier);
+    const hasDiscount = base != null && discount.value > 0;
+    const final = base != null && hasDiscount ? calculateDiscount(base, discount.type, discount.value).finalPrice : base;
+    return { tier, base, final, hasDiscount, discount };
+  });
 
-    return (
-      <div>
-        {hasDiscount && (
-          <p className="text-[10px] lg:text-[11px] text-ink-muted line-through">{formatVND(ctx.basePrice)}</p>
-        )}
-        <p className="text-[14px] lg:text-[19px] font-bold leading-none tracking-tight text-teal-dark">
-          {guestPricing?.totalPrice != null ? formatVND(guestPricing.totalPrice) : formatVND(dayPrice)}
-        </p>
-        <p className="mt-1 text-[10px] lg:text-[11px] text-ink-muted">
-          {TIER_LABEL_SHORT[ctx.tier]} · {formatDateVN(ctx.date)}
-          {hasDiscount && ` · CK ${formatDiscount(ctx.discountType, ctx.discountValue)}`}
-        </p>
-        {guestPricing?.isOverStandard && guestPricing.totalPrice != null && (
-          <p className="mt-0.5 text-[9.5px] lg:text-[10.5px] text-ink-muted">
-            Giá gốc {formatVND(dayPrice)} + {guestPricing.extraGuests} khách × {formatVND(guestPricing.extraFeePerGuest!)}
-          </p>
-        )}
-        {guestPricing?.isOverStandard && guestPricing.totalPrice == null && (
-          <p className="mt-0.5 flex items-center gap-1 text-[9.5px] lg:text-[10.5px] font-medium text-sand">
-            <AlertTriangle className="h-3 w-3 shrink-0" />
-            Cần xác nhận phụ thu khách vượt tiêu chuẩn
-          </p>
-        )}
-      </div>
-    );
-  }
+  // Phụ thu khách vượt chuẩn — tính cho khung đang được hỏi (nếu chỉ 1 khung)
+  const hotRow = hot.size === 1 ? rows.find((r) => hot.has(r.tier)) : undefined;
+  const isOver = requestedGuests != null && product.standard_guests != null && requestedGuests > product.standard_guests;
+  const guestPricing = isOver && hotRow?.final != null ? calcGuestPricing(product, requestedGuests!, hotRow.final) : null;
 
-  // Không có ngày — không giả định weekday, hiện đủ 3 khung giá
   return (
-    <div className="text-[10px] lg:text-[11.5px] leading-relaxed text-ink-muted">
-      <p>
-        <span className="font-semibold text-ink">{TIER_LABEL_SHORT.weekday}</span>{" "}
-        {formatVNDShort(product.price_weekday)}
-      </p>
-      <p>
-        <span className="font-semibold text-ink">{TIER_LABEL_SHORT.friday_sunday}</span>{" "}
-        {formatVNDShort(product.price_friday_sunday)}
-      </p>
-      <p>
-        <span className="font-semibold text-ink">{TIER_LABEL_SHORT.saturday_holiday}</span>{" "}
-        {formatVNDShort(product.price_saturday_holiday)}
-      </p>
-      {requestedGuests && product.standard_guests != null && requestedGuests > product.standard_guests && (
-        <p className="mt-0.5 flex items-center gap-1 font-medium text-sand">
+    <div className="w-full">
+      <div className="overflow-hidden rounded-xl border border-border bg-paper/60">
+        {rows.map(({ tier, base, final, hasDiscount, discount }, i) => {
+          const isHot = hot.has(tier);
+          return (
+            <div
+              key={tier}
+              className={cn(
+                "flex items-center gap-1.5 px-2 py-1 lg:px-2.5 lg:py-1.5",
+                i > 0 && "border-t border-border/70",
+                isHot && "bg-hot-light"
+              )}
+            >
+              <span
+                className={cn(
+                  "w-[46px] lg:w-[58px] shrink-0 text-[10.5px] lg:text-[12px] font-semibold",
+                  isHot ? "text-hot" : "text-ink-muted"
+                )}
+              >
+                {TIER_LABEL_SHORT[tier]}
+              </span>
+              <span className="flex min-w-0 flex-1 items-baseline justify-end gap-1 tabular-price">
+                {hasDiscount && (
+                  <span className="hidden sm:inline text-[10px] lg:text-[11px] text-ink-muted/80 line-through">
+                    {shortMoney(base)}
+                  </span>
+                )}
+                <span
+                  className={cn(
+                    "text-[12.5px] lg:text-[15px] font-bold tracking-tight",
+                    isHot ? "text-hot" : "text-teal-dark"
+                  )}
+                >
+                  {shortMoney(final)}
+                </span>
+              </span>
+              {hasDiscount ? (
+                <span className="shrink-0 rounded-md bg-coral px-1 py-0.5 text-[9px] lg:text-[10.5px] font-bold leading-none text-white">
+                  -{discount.type === "amount" ? shortMoney(discount.value) : formatDiscount(discount.type, discount.value)}
+                </span>
+              ) : (
+                <span className="w-0 lg:w-0" />
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {ctx && (
+        <p className="mt-1 text-[10px] lg:text-[11.5px] font-medium text-hot">
+          Ngày đi {formatDateVN(ctx.date)} · {TIER_LABEL_SHORT[ctx.tier]}
+        </p>
+      )}
+      {guestPricing?.isOverStandard && guestPricing.totalPrice != null && (
+        <p className="mt-0.5 text-[10px] lg:text-[11px] text-ink-muted">
+          +{guestPricing.extraGuests} khách × {formatVND(guestPricing.extraFeePerGuest!)} ={" "}
+          <b className="text-hot">{formatVND(guestPricing.totalPrice)}</b>
+        </p>
+      )}
+      {isOver && !(guestPricing?.totalPrice != null) && (
+        <p className="mt-1 flex items-center gap-1 text-[10px] lg:text-[11px] font-medium text-sand-dark">
           <AlertTriangle className="h-3 w-3 shrink-0" />
           Cần xác nhận phụ thu khách vượt tiêu chuẩn
         </p>
@@ -96,8 +152,11 @@ export function ProductCard({
   rank,
   reason,
   requestedGuests,
+  highlightTiers,
 }: {
   product: Product & { _pricing?: DatePricingContext; _reason?: string };
+  /** Khung giá khách hỏi (VD "cuối tuần") — tô đỏ dòng tương ứng */
+  highlightTiers?: PriceTier[];
   /** VD: "Phù hợp nhất" — chỉ nên truyền cho kết quả #1 của một tìm kiếm có nội dung */
   matchLabel?: string;
   /** 1, 2, 3 — hiện huy chương 🥇🥈🥉 cho Top 3 "phù hợp nhất" */
@@ -137,10 +196,10 @@ export function ProductCard({
 
         <div className="flex flex-1 flex-col gap-1.5 lg:gap-2 p-2 lg:p-3.5">
           <div>
-            <h3 className="font-semibold text-[12.5px] lg:text-[15px] leading-snug text-ink line-clamp-1">
+            <h3 className="font-bold text-[13px] lg:text-[16px] leading-snug text-ink line-clamp-1">
               {product.product_name}
             </h3>
-            <p className="mt-0.5 flex items-center gap-1 text-[11px] lg:text-[13px] text-ink-muted">
+            <p className="mt-0.5 flex items-center gap-1 text-[11px] lg:text-[13px] font-medium text-teal">
               <MapPin className="h-3 w-3 lg:h-3.5 lg:w-3.5 shrink-0" />
               <span className="truncate">
                 {product.sub_region ? `${product.sub_region}, ${product.area}` : product.area}
@@ -175,14 +234,11 @@ export function ProductCard({
           </div>
 
           {reason && (
-            <p className="text-[10.5px] lg:text-[12px] text-teal-dark line-clamp-1">{reason}</p>
+            <p className="rounded-md bg-teal-light px-1.5 py-0.5 text-[10.5px] lg:text-[12px] font-medium text-teal-dark line-clamp-1">{reason}</p>
           )}
 
-          <div className="mt-auto flex items-end justify-between pt-1 lg:pt-1.5">
-            <PriceBlock product={product} requestedGuests={requestedGuests} />
-            <span className="hidden shrink-0 rounded-lg border border-border px-2.5 py-1.5 text-[12px] font-medium text-ink-muted group-hover:bg-paper-dim lg:block">
-              Xem chi tiết
-            </span>
+          <div className="mt-auto pt-1 lg:pt-1.5">
+            <PriceBlock product={product} requestedGuests={requestedGuests} highlightTiers={highlightTiers} />
           </div>
         </div>
       </Card>

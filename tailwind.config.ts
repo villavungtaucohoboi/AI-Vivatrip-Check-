@@ -12,7 +12,7 @@ const config: Config = {
         paper: "#F7F6F2",
         "paper-dim": "#EFEDE6",
         ink: "#1B211F",
-        "ink-muted": "#5B655F",
+        "ink-muted": "#4F5953",
         teal: {
           DEFAULT: "#0E6B5A",
           dark: "#0A5347",
@@ -24,6 +24,16 @@ const config: Config = {
           dark: "#7A5F2B",
         },
         border: "#E2DFD5",
+        // Đỏ nổi bật — tô dòng giá đúng ngày khách hỏi
+        hot: {
+          DEFAULT: "#D92D20",
+          light: "#FEECEA",
+        },
+        // Cam san hô — nhãn chiết khấu
+        coral: {
+          DEFAULT: "#F0592A",
+          light: "#FFEDE5",
+        },
         danger: {
           DEFAULT: "#B3402A",
           light: "#F5E4DF",

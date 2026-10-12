@@ -1,4 +1,4 @@
-import { ProductType, SearchFilters } from "./types";
+import { PriceTier, ProductType, SearchFilters } from "./types";
 import { getClusterAreas, findClusterByPhrase } from "./area-clusters";
 
 // Parser dựa trên keyword/regex — KHÔNG gọi AI, luôn chạy được kể cả
@@ -57,7 +57,7 @@ const STOPWORDS = new Set([
   "can", "tim", "co", "cho", "gia", "khoang", "tam", "toi", "da", "thieu", "duoi", "tren",
   "nguoi", "khach", "phong", "ngu", "dem", "tai", "o", "va", "voi", "mot", "cac", "san",
   "pham", "cua", "la", "nay", "do", "the", "day", "trong", "khong", "qua", "tu", "den",
-  "hoac", "hay", "muon", "xin", "chi", "chinh", "cuoi", "tuan", "ngay", "di",
+  "hoac", "hay", "muon", "xin", "chi", "chinh", "cuoi", "tuan", "ngay", "di", "thuong", "le", "dip",
 ]);
 
 function parseMoney(numStr: string, unit: string): number {
@@ -153,6 +153,17 @@ export function parseQuery(
 
   const date = parseDate(norm, now);
   if (date) filters.date = date;
+
+  // Khung giá khách hỏi chung chung (không có ngày cụ thể) → để tô đỏ trên thẻ
+  if (!date) {
+    const tiers: PriceTier[] = [];
+    if (/\bngay thuong\b|\btrong tuan\b/.test(norm)) tiers.push("weekday");
+    if (/\bcuoi tuan\b/.test(norm)) tiers.push("friday_sunday", "saturday_holiday");
+    if (/\bngay le\b|\bdip le\b|\ble tet\b/.test(norm) && !tiers.includes("saturday_holiday")) {
+      tiers.push("saturday_holiday");
+    }
+    if (tiers.length > 0) filters.dayTiers = tiers;
+  }
 
   // --- Tiểu khu vực: so khớp trước (chuỗi dài hơn ưu tiên), vì tên tiểu khu
   // vực thường cụ thể hơn tên khu vực lớn (VD "Đồng Đò" trong "Sóc Sơn")

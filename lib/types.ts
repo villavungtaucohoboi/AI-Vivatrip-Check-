@@ -108,6 +108,9 @@ export interface SearchFilters {
   priceTo?: number;
   budget?: number; // ngân sách "khoảng X" dùng để xếp hạng theo độ gần giá
   date?: string; // YYYY-MM-DD — "Ngày đi", ảnh hưởng giá villa/resort
+  /** Khung giá khách hỏi khi KHÔNG nói ngày cụ thể (VD "cuối tuần", "ngày
+   * thường") — chỉ dùng để TÔ ĐỎ dòng giá tương ứng trên thẻ, không lọc. */
+  dayTiers?: PriceTier[];
   name?: string; // từ khoá tên sản phẩm, VD "doris" trích từ "Doris villa sóc sơn"
   pool?: boolean;
   near_beach?: boolean;

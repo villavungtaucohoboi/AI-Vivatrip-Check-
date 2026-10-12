@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import { Be_Vietnam_Pro } from "next/font/google";
 import { Toaster } from "sonner";
 import { ServiceWorkerRegister } from "@/components/service-worker-register";
 import { Header } from "@/components/header";
@@ -7,9 +7,10 @@ import { BottomNav } from "@/components/bottom-nav";
 import { ChatWidget } from "@/components/chat/chat-widget";
 import "./globals.css";
 
-const inter = Inter({
+// Be Vietnam Pro: font thiết kế riêng cho tiếng Việt — dấu rõ, dễ đọc hơn Inter
+const inter = Be_Vietnam_Pro({
   subsets: ["latin", "vietnamese"],
-  weight: ["400", "500", "600", "700"],
+  weight: ["400", "500", "600", "700", "800"],
   variable: "--font-body",
   display: "swap",
 });
