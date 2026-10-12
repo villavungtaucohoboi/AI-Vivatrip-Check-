@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { ProductImage } from "@/components/product-image";
-import { Loader2, Upload, X } from "lucide-react";
+import { History, Loader2, Sparkles, Undo2, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { type ProductInput, type HotelRateInput } from "@/lib/admin-types";
@@ -137,6 +137,34 @@ export function ProductForm({
     setForm((f) => ({ ...f, [key]: value }));
   }
 
+  const [summarizing, setSummarizing] = useState(false);
+  const [noteBackup, setNoteBackup] = useState<string | null>(null);
+  // Bản gốc đã lưu trong DB (cột note_original, có sau khi chạy SQL 0025)
+  const savedOriginal = (product as { note_original?: string | null } | undefined)?.note_original ?? null;
+
+  async function handleSummarizeNote() {
+    // Luôn rút gọn từ bản đầy đủ nhất (bản gốc đã lưu nếu có)
+    const original = savedOriginal ?? form.note ?? "";
+    if (!original.trim()) return;
+    setSummarizing(true);
+    try {
+      const res = await fetch("/api/admin/summarize-note", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: original }),
+      });
+      const data = (await res.json()) as { summary?: string; engine?: string; error?: string };
+      if (!res.ok || !data.summary) throw new Error(data.error || "Không rút gọn được");
+      setNoteBackup(form.note ?? "");
+      set("note", data.summary);
+      toast.success(data.engine === "ai" ? "Đã rút gọn bằng AI — kiểm tra lại rồi bấm Lưu." : "Đã rút gọn — kiểm tra lại rồi bấm Lưu.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Không rút gọn được");
+    } finally {
+      setSummarizing(false);
+    }
+  }
+
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
     const newItems: NewImage[] = files.map((file) => ({
@@ -208,6 +236,11 @@ export function ProductForm({
       }
 
       await postJson(`/api/admin/products/${productId}/images`, { imageUrls: finalUrls });
+
+      // Vừa rút gọn nội dung → lưu kèm bản gốc (lần đầu) để sau này khôi phục được
+      if (noteBackup != null && savedOriginal == null) {
+        await postJson("/api/admin/bulk/notes", { items: [{ id: productId, note: form.note ?? "", original: noteBackup }] }).catch(() => null);
+      }
 
       if (form.type === "hotel") {
         const validRates = rateItems.filter((r) => r.room_type.trim() && r.price > 0);
@@ -540,12 +573,50 @@ export function ProductForm({
       <Card className="p-4 sm:p-5 space-y-4">
         <h2 className="font-display text-base text-ink">Ghi chú & liên kết</h2>
         <div>
-          <Label htmlFor="note">Ghi chú</Label>
+          <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+            <Label htmlFor="note" className="mb-0">Nội dung căn / Ghi chú</Label>
+            <div className="flex gap-1.5">
+              {noteBackup != null && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    set("note", noteBackup);
+                    setNoteBackup(null);
+                  }}
+                  className="flex items-center gap-1 rounded-lg border border-border bg-white px-2.5 py-1.5 text-[12px] font-semibold text-ink-muted hover:bg-paper-dim"
+                >
+                  <Undo2 className="h-3.5 w-3.5" /> Hoàn tác
+                </button>
+              )}
+              {savedOriginal != null && form.note !== savedOriginal && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNoteBackup(form.note ?? "");
+                    set("note", savedOriginal);
+                  }}
+                  className="flex items-center gap-1 rounded-lg border border-border bg-white px-2.5 py-1.5 text-[12px] font-semibold text-ink-muted hover:bg-paper-dim"
+                >
+                  <History className="h-3.5 w-3.5" /> Khôi phục bản gốc
+                </button>
+              )}
+              <button
+                type="button"
+                disabled={summarizing || !(form.note ?? "").trim()}
+                onClick={handleSummarizeNote}
+                className="flex items-center gap-1 rounded-lg bg-gradient-to-r from-teal-dark to-teal px-2.5 py-1.5 text-[12px] font-bold text-white shadow-sm disabled:opacity-50"
+              >
+                {summarizing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                Rút gọn ý chính
+              </button>
+            </div>
+          </div>
           <Textarea
             id="note"
             value={form.note ?? ""}
             onChange={(e) => set("note", e.target.value)}
-            placeholder="Ghi chú nội bộ cho sale..."
+            rows={8}
+            placeholder="Dán nguyên bài giới thiệu căn (từ chủ nhà, Facebook, Zalo...) rồi bấm “Rút gọn ý chính”."
           />
         </div>
         <div>

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Loader2, Plus, Sparkles, X } from "lucide-react";
 import { SearchBar } from "@/components/search-bar";
+import { NameQuickSearch } from "@/components/name-quick-search";
 import { FilterSheet } from "@/components/filter-sheet";
 import { FilterBar } from "@/components/filter-bar";
 import { ProductGrid } from "@/components/product-grid";
@@ -241,6 +242,8 @@ export function SearchExperience({
       </div>
 
       <MotivationButton />
+
+      <NameQuickSearch scope="villa" />
 
       <div className="space-y-3">
         <SearchBar

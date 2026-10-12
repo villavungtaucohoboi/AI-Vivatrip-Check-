@@ -5,7 +5,7 @@ import { Check, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-export function CopyButton({ text, className }: { text: string; className?: string }) {
+export function CopyButton({ text, className, label = "Copy", toastText = "Đã copy" }: { text: string; className?: string; label?: string; toastText?: string }) {
   const [copied, setCopied] = useState(false);
 
   async function handleCopy() {
@@ -23,7 +23,7 @@ export function CopyButton({ text, className }: { text: string; className?: stri
       document.body.removeChild(textarea);
     }
     setCopied(true);
-    toast.success("Đã copy");
+    toast.success(toastText);
     setTimeout(() => setCopied(false), 1500);
   }
 
@@ -38,7 +38,7 @@ export function CopyButton({ text, className }: { text: string; className?: stri
       aria-label="Copy nội dung"
     >
       {copied ? <Check className="h-3.5 w-3.5 text-teal" /> : <Copy className="h-3.5 w-3.5" />}
-      {copied ? "Đã copy" : "Copy"}
+      {copied ? "Đã copy" : label}
     </button>
   );
 }

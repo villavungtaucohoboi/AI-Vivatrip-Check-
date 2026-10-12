@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, Building2, Home, Ship } from "lucide-react";
+import { ArrowLeft, Building2, Home, Ship, Sparkles } from "lucide-react";
 
 const SECTIONS = [
   {
@@ -34,7 +34,21 @@ export default function BulkHubPage() {
         Dành cho Admin khi cần cập nhật nhiều sản phẩm một lúc. Muốn thêm hoặc sửa từng sản phẩm thì vẫn dùng nút <b>Thêm sản phẩm</b> và biểu tượng bút ở Quản lý sản phẩm như cũ — hai cách dùng riêng, không ảnh hưởng nhau.
       </p>
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-3">
+      <Link
+        href="/admin/bulk/notes"
+        className="mt-6 flex items-center gap-3 rounded-2xl border border-teal/30 bg-gradient-to-r from-teal-light to-white p-4 hover:shadow-float"
+      >
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal text-white">
+          <Sparkles className="h-5 w-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[15px] font-bold text-ink">Rút gọn nội dung hàng loạt</span>
+          <span className="block text-[12.5px] text-ink-muted">Chọn nhiều căn, rút gọn ý chính 1 lần. Mỗi căn hoàn tác / khôi phục bản gốc riêng.</span>
+        </span>
+        <span className="text-teal">→</span>
+      </Link>
+
+      <div className="mt-4 grid gap-4 sm:grid-cols-3">
         {SECTIONS.map(({ key, title, desc, icon: Icon }) => (
           <div key={key} className="flex flex-col rounded-2xl border border-border bg-white p-4">
             <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-teal-light">

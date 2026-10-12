@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { SearchBar } from "@/components/search-bar";
+import { NameQuickSearch } from "@/components/name-quick-search";
 import { ResortProductCard } from "@/components/resort-product-card";
 import { EmptyState } from "@/components/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -69,6 +70,10 @@ export function ResortSearchExperience({ areas }: { areas: string[] }) {
       </p>
 
       <div className="mt-5">
+        <NameQuickSearch scope="resort" placeholder="Tìm nhanh theo tên resort / khách sạn…" />
+      </div>
+
+      <div className="mt-3">
         <SearchBar
           value={query}
           onChange={setQuery}

@@ -3,7 +3,9 @@ import { notFound } from "next/navigation";
 import {
   ArrowLeft,
   BedDouble,
+  BedSingle,
   Droplet,
+  UserPlus,
   Dumbbell,
   Eye,
   ExternalLink,
@@ -13,7 +15,9 @@ import {
   Users,
   Waves,
 } from "lucide-react";
-import { createClient } from "@/lib/supabase/server";
+import { createPublicClient } from "@/lib/supabase/public-client";
+import { villaQuoteText } from "@/lib/villa-text";
+import { NoteView } from "@/components/note-view";
 import { ProductGallery } from "@/components/product-gallery";
 import { CopyButton } from "@/components/copy-button";
 import { DownloadImagesButton } from "@/components/download-images-button";
@@ -56,7 +60,7 @@ export default async function ProductDetailPage({
 }) {
   const { id } = await params;
   const { date, guests } = await searchParams;
-  const supabase = await createClient();
+  const supabase = createPublicClient();
 
   const { data: productRow } = await supabase.from("products").select("*").eq("id", id).single();
 
@@ -91,7 +95,6 @@ export default async function ProductDetailPage({
   const pricingContext =
     isVilla && date ? resolveProductPricing(product, { date }, (holidays ?? []) as Holiday[]).context : undefined;
 
-  const heroPrice = pricingContext?.finalPrice ?? pricingContext?.basePrice ?? product.price_weekday;
 
   if (!isVilla) {
     return (
@@ -140,7 +143,7 @@ export default async function ProductDetailPage({
               <h2 className="font-display text-base text-ink">Ghi chú</h2>
               <CopyButton text={product.note} />
             </div>
-            <p className="whitespace-pre-line text-sm text-ink-muted">{product.note}</p>
+            <NoteView text={product.note} />
           </Card>
         )}
 
@@ -171,11 +174,18 @@ export default async function ProductDetailPage({
     );
   }
 
+  const stats = [
+    { show: product.bedrooms != null, Icon: BedDouble, value: product.bedrooms, label: "Phòng ngủ", tone: "bg-teal-light text-teal-dark" },
+    { show: product.beds != null, Icon: BedSingle, value: product.beds, label: "Giường", tone: "bg-sky-50 text-sky-700" },
+    { show: product.standard_guests != null, Icon: Users, value: product.standard_guests, label: "Khách chuẩn", tone: "bg-amber-50 text-amber-700" },
+    { show: product.max_guests != null, Icon: UserPlus, value: product.max_guests, label: "Tối đa", tone: "bg-rose-50 text-rose-700" },
+  ].filter((x) => x.show);
+
   return (
-    <main className="mx-auto max-w-3xl px-4 py-6 sm:px-6 sm:py-8">
+    <main className="mx-auto max-w-3xl px-4 py-5 sm:px-6 sm:py-8">
       <Link
         href={backHref}
-        className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-ink-muted hover:text-ink"
+        className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-border bg-white px-3 py-1.5 text-[13px] font-semibold text-ink-muted shadow-sm hover:text-ink"
       >
         <ArrowLeft className="h-4 w-4" />
         Quay lại tìm kiếm
@@ -183,85 +193,77 @@ export default async function ProductDetailPage({
 
       <ProductGallery images={gallery} alt={product.product_name} />
 
-      <div className="mt-5 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <Badge variant="neutral" className="mb-2">
+      {/* Tên + vị trí */}
+      <div className="mt-4">
+        <div className="mb-1.5 flex items-center gap-1.5">
+          <span className="rounded-full bg-teal px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
             {PRODUCT_TYPE_LABEL[product.type]}
-          </Badge>
-          <h1 className="font-display text-2xl text-ink">{product.product_name}</h1>
-          <p className="mt-1 flex items-center gap-1.5 text-sm text-ink-muted">
-            <MapPin className="h-4 w-4" />
-            {product.address || (product.sub_region ? `${product.sub_region}, ${product.area}` : product.area)}
-          </p>
+          </span>
+          {product.product_code && (
+            <span className="rounded-full bg-paper-dim px-2.5 py-0.5 text-[11px] font-semibold text-ink-muted">Mã {product.product_code}</span>
+          )}
         </div>
-        <div className="text-right">
-          <p className="tabular-price font-display text-2xl text-teal-dark">{formatVND(heroPrice)}</p>
-          {!date && <p className="text-xs text-ink-muted">giá Thứ 2 - Thứ 5, xem đủ bảng giá bên dưới</p>}
-        </div>
+        <h1 className="text-[24px] font-extrabold leading-tight tracking-tight text-ink sm:text-[28px]">{product.product_name}</h1>
+        <p className="mt-1.5 flex items-start gap-1.5 text-[14px] font-medium text-teal">
+          <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
+          {product.address || (product.sub_region ? `${product.sub_region}, ${product.area}` : product.area)}
+        </p>
       </div>
 
-      {activeAmenities.length > 0 && (
-        <div className="mt-4 flex flex-wrap gap-2">
-          {activeAmenities.map(({ key, label, Icon }) => (
-            <Badge key={key} variant="default">
-              <Icon className="h-3.5 w-3.5" />
-              {label}
-            </Badge>
+      {/* Thông số nhanh */}
+      {stats.length > 0 && (
+        <div className="mt-4 grid grid-cols-4 gap-2">
+          {stats.map(({ Icon, value, label, tone }) => (
+            <div key={label} className="flex flex-col items-center rounded-2xl border border-border bg-white px-1 py-2.5 shadow-card">
+              <span className={`flex h-8 w-8 items-center justify-center rounded-full ${tone}`}>
+                <Icon className="h-4 w-4" />
+              </span>
+              <span className="mt-1 text-[17px] font-extrabold leading-none text-ink">{value}</span>
+              <span className="mt-0.5 text-[10.5px] font-medium text-ink-muted">{label}</span>
+            </div>
           ))}
         </div>
       )}
 
-      <Card className="mt-5 p-4 sm:p-5">
-        <h2 className="mb-1 font-display text-base text-ink">Thông tin sản phẩm</h2>
-        <InfoRow label="Mã sản phẩm" value={product.product_code} />
-        <InfoRow label="Khu vực" value={product.area} />
-        {product.bedrooms != null && (
-          <InfoRow
-            label="Số phòng ngủ"
-            value={
-              <span className="flex items-center gap-1.5">
-                <BedDouble className="h-4 w-4 text-ink-muted" />
-                {product.bedrooms}
-              </span>
-            }
-          />
-        )}
-        {product.beds != null && <InfoRow label="Số giường" value={product.beds} />}
-        {product.standard_guests != null && (
-          <InfoRow label="Sức chứa tiêu chuẩn" value={`${product.standard_guests} khách`} />
-        )}
-        {product.max_guests != null && (
-          <InfoRow
-            label="Sức chứa tối đa"
-            value={
-              <span className="flex items-center gap-1.5">
-                <Users className="h-4 w-4 text-ink-muted" />
-                {product.max_guests} khách
-              </span>
-            }
-          />
-        )}
-      </Card>
-
-      {product.note && (
-        <Card className="mt-4 p-4 sm:p-5">
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="font-display text-base text-ink">Ghi chú</h2>
-            <CopyButton text={product.note} />
-          </div>
-          <p className="whitespace-pre-line text-sm text-ink-muted">{product.note}</p>
-        </Card>
+      {/* Tiện ích */}
+      {activeAmenities.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {activeAmenities.map(({ key, label, Icon }) => (
+            <span key={key} className="flex items-center gap-1.5 rounded-full bg-teal-light px-3 py-1.5 text-[12.5px] font-semibold text-teal-dark">
+              <Icon className="h-3.5 w-3.5" />
+              {label}
+            </span>
+          ))}
+        </div>
       )}
 
+      {/* Bảng giá */}
       <Card className="mt-4 p-4 sm:p-5">
-        <h2 className="mb-3 font-display text-base text-ink">Bảng giá</h2>
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h2 className="text-[16px] font-extrabold text-ink">Bảng giá / đêm</h2>
+          <CopyButton
+            text={villaQuoteText(product)}
+            label="Copy gửi khách"
+            toastText="Đã copy nội dung — dán vào Zalo gửi khách"
+            className="bg-gradient-to-r from-teal-dark to-teal !text-white font-bold shadow-sm hover:opacity-95"
+          />
+        </div>
         <VillaPricingTable product={product} context={pricingContext} />
       </Card>
 
-      <div className="mt-5 flex flex-wrap gap-3">
-        {gallery.length > 0 && (
-          <DownloadImagesButton images={gallery} productName={product.product_name} />
-        )}
+      {/* Nội dung căn */}
+      {product.note && (
+        <Card className="mt-4 p-4 sm:p-5">
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="text-[16px] font-extrabold text-ink">Thông tin căn</h2>
+            <CopyButton text={product.note} />
+          </div>
+          <NoteView text={product.note} />
+        </Card>
+      )}
+
+      <div className="mt-4 grid grid-cols-1 gap-2.5 sm:flex sm:flex-wrap">
+        {gallery.length > 0 && <DownloadImagesButton images={gallery} productName={product.product_name} />}
         {product.google_maps_url && (
           <a href={product.google_maps_url} target="_blank" rel="noopener noreferrer">
             <Button variant="outline" className="w-full sm:w-auto">
