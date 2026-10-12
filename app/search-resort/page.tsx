@@ -1,11 +1,13 @@
-import { createClient } from "@/lib/supabase/server";
+import { createPublicClient } from "@/lib/supabase/public-client";
 import { ResortSearchExperience } from "@/components/resort-search-experience";
 import { normalizeAreaName } from "@/lib/normalize-area";
 
 export const revalidate = 30;
 
 export default async function SearchResortPage() {
-  const supabase = await createClient();
+  // Client không đọc cookie → trang được cache 30s thật sự (trước đây đọc
+  // cookie nên Next.js bỏ qua revalidate, lần nào mở cũng truy vấn lại).
+  const supabase = createPublicClient();
 
   const { data: areaRows } = await supabase.rpc("get_distinct_areas");
 

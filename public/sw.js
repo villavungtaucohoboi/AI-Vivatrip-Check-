@@ -1,4 +1,4 @@
-const CACHE_NAME = "vivatrip-shell-v1";
+const CACHE_NAME = "vivatrip-shell-v2";
 const SHELL_ASSETS = ["/icons/icon-192.png", "/icons/icon-512.png"];
 
 self.addEventListener("install", (event) => {
@@ -17,18 +17,31 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-// Network-first: luôn ưu tiên lấy dữ liệu mới nhất (sản phẩm, quỹ ngày lễ...
-// thay đổi liên tục), chỉ dùng cache làm phương án dự phòng khi mất mạng.
+// Chỉ lưu vào máy các file tĩnh của web (JS/CSS/font/icon) — những file
+// này có tên kèm mã phiên bản nên không bao giờ bị cũ. KHÔNG lưu ảnh, API,
+// trang HTML như trước (trước đây lưu mọi thứ, không giới hạn → bộ nhớ điện
+// thoại nhân viên phình dần mà không làm web nhanh hơn).
 self.addEventListener("fetch", (event) => {
-  if (event.request.method !== "GET") return;
+  const req = event.request;
+  if (req.method !== "GET") return;
+  const url = new URL(req.url);
+  if (url.origin !== self.location.origin) return;
 
+  const isStatic = url.pathname.startsWith("/_next/static/") || url.pathname.startsWith("/icons/");
+  if (!isStatic) return; // để trình duyệt tự xử lý như bình thường
+
+  // Cache-first cho file tĩnh: mở web lần sau gần như tức thì.
   event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        const copy = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-        return response;
-      })
-      .catch(() => caches.match(event.request))
+    caches.match(req).then(
+      (hit) =>
+        hit ||
+        fetch(req).then((res) => {
+          if (res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
+          }
+          return res;
+        })
+    )
   );
 });

@@ -1,11 +1,13 @@
-import { createClient } from "@/lib/supabase/server";
+import { createPublicClient } from "@/lib/supabase/public-client";
 import { fetchCruises } from "@/lib/cruise-data";
 import { CruiseSaleView } from "@/components/cruises/cruise-sale-view";
 
 export const revalidate = 30;
 
 export default async function CruisesPage() {
-  const supabase = await createClient();
+  // Client không đọc cookie → trang được cache 30s thật sự (trước đây đọc
+  // cookie nên Next.js bỏ qua revalidate, lần nào mở cũng truy vấn lại).
+  const supabase = createPublicClient();
   const cruises = await fetchCruises(supabase, { onlyActive: true });
 
   return (
