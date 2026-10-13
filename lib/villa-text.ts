@@ -50,7 +50,8 @@ export function villaQuoteText(product: Product): string {
       ? `${product.standard_guests} khách${product.max_guests ? ` (tối đa ${product.max_guests})` : ""}`
       : "",
   ].filter(Boolean);
-  if (specs.length) lines.push(`🛏️ ${specs.join(" · ")}`);
+  // Nội dung đã có mục "⭐ TỔNG QUAN" thì không lặp lại dòng thông số
+  if (specs.length && !product.note?.includes("TỔNG QUAN")) lines.push(`🛏️ ${specs.join(" · ")}`);
   const am = AMENITY_TEXT.filter((a) => product[a.key]).map((a) => a.label);
   if (am.length) lines.push(`🌟 ${am.join(" · ")}`);
 
@@ -69,124 +70,220 @@ export function villaQuoteText(product: Product): string {
 }
 
 // ---------------------------------------------------------------------------
-// Rút gọn nội dung dán từ nơi khác (Zalo / Facebook / file chủ nhà gửi) —
-// bản KHÔNG cần AI: bỏ emoji trang trí, hashtag, câu quảng cáo, dòng trùng;
-// giữ các dòng có thông tin thật (phòng, giường, tiện ích, giờ nhận/trả,
-// phụ thu, cọc, khoảng cách...). Có API key AI thì route sẽ dùng AI thay thế.
+// RÚT GỌN NỘI DUNG CĂN (bản miễn phí, không cần AI)
+//
+// Đầu ra luôn theo 1 khung cố định, thứ tự khách cần biết:
+//   ⭐ TỔNG QUAN  (số phòng ngủ · WC · khách · diện tích — tự trích ra)
+//   🛏️ PHÒNG & KHÔNG GIAN → 🎉 TIỆN ÍCH MIỄN PHÍ → 💳 DỊCH VỤ TÍNH PHÍ
+//   👥 SỨC CHỨA & PHỤ THU → 📍 VỊ TRÍ & VIEW → ⏰ NHẬN – TRẢ PHÒNG → 📌 LƯU Ý
+// - Đọc được chữ "kiểu" Facebook (𝐁𝐨𝐥𝐝, 𝑰𝒕𝒂𝒍𝒊𝒄) nhờ chuẩn hoá NFKC.
+// - Tôn trọng tiêu đề mục có sẵn trong bài gốc ("Tiện ích miễn phí:",
+//   "Dịch vụ tính phí:"...): các dòng bên dưới được xếp đúng mục đó.
 // ---------------------------------------------------------------------------
-const KEEP_HINTS =
-  /(phong|pn\b|giuong|wc|toilet|nha ve sinh|khach|nguoi|be boi|ho boi|bể bơi|karaoke|bbq|nuong|bep|san |sân|view|ho\b|bien|cach|km|phut|check|nhan phong|tra phong|gio|phu thu|coc|dat coc|huy|tre em|thu cung|pet|xe|bai do|wifi|tivi|tv|dieu hoa|nong lanh|bida|bi-a|pickleball|tennis|golf|xong hoi|jacuzzi|bon tam|loa|am thanh|an |do an|nau|dien tich|m2|tang|lau|san vuon|gia|trieu|tr\b|k\b|\d)/;
-const DROP_HINTS =
-  /(^chao |^xin chao|kinh chao|^hello|inbox|ib\b|lien he ngay|lh ngay|dat ngay|nhanh tay|so luong co han|uu dai khung|hot hot|share|tha tim|follow|zalo:|hotline|sdt|so dien thoai|www\.|http|fanpage|kenh|page\b|chuc quy khach|tran trong|xin cam on|cam on)/;
+export const NOTE_SECTIONS = [
+  { key: "overview", title: "⭐ TỔNG QUAN" },
+  { key: "space", title: "🛏️ PHÒNG & KHÔNG GIAN" },
+  { key: "amenity", title: "🎉 TIỆN ÍCH MIỄN PHÍ" },
+  { key: "paid", title: "💳 DỊCH VỤ TÍNH PHÍ" },
+  { key: "capacity", title: "👥 SỨC CHỨA & PHỤ THU" },
+  { key: "location", title: "📍 VỊ TRÍ & VIEW" },
+  { key: "time", title: "⏰ NHẬN – TRẢ PHÒNG" },
+  { key: "policy", title: "📌 LƯU Ý" },
+] as const;
+type SectionKey = (typeof NOTE_SECTIONS)[number]["key"];
+const TITLE_TO_KEY = new Map<string, SectionKey>(
+  NOTE_SECTIONS.map((x) => [plainVN(x.title).replace(/[^a-z ]/g, " ").replace(/\s+/g, " ").trim(), x.key])
+);
 
 function plainVN(s: string): string {
   return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d");
 }
+/** Tìm từ/cụm từ đứng riêng (không dính chữ cái hai bên) trong chuỗi đã bỏ dấu. */
+const w = (src: string) => new RegExp(`(?<![a-z])(?:${src})(?![a-z])`);
 
-export function summarizeNoteBasic(raw: string, maxLines = 14): string {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  const pieces = raw
-    .replace(/\r/g, "")
-    .split(/\n|(?<=[.!?])\s+(?=[A-ZÀ-Ỹ0-9])/)
-    .map((l) =>
-      l
-        .replace(/#[\p{L}\p{N}_]+/gu, " ") // hashtag
-        .replace(/[\p{Extended_Pictographic}\u{FE0F}\u{200D}]/gu, " ") // emoji
-        .replace(/^[\s\-–—•*+>✓✔☑️·.,:;|]+/u, "") // gạch đầu dòng cũ
-        .replace(/([!?.~])\1+/g, "$1")
-        .replace(/\s{2,}/g, " ")
-        .trim()
-    )
-    .filter((l) => l.length >= 4);
+const DROP = w(
+  "chao quy khach|xin chao|kinh chao|hello|inbox|ib|lien he ngay|lh ngay|dat ngay|nhanh tay|so luong co han|hot hot|share|tha tim|follow|hotline|sdt|so dien thoai|fanpage|tran trong|xin cam on|cam on"
+);
+const URL_OR_PHONE = /(https?:\/\/|www\.|0\d{2,3}[.\s]?\d{3}[.\s]?\d{3,4})/;
 
-  const kept: string[] = [];
-  for (const line of pieces) {
-    const p = plainVN(line);
-    if (SECTION_TITLES_PLAIN.has(p.replace(/[^a-z ]/g, "").replace(/\s+/g, " ").trim())) continue;
-    if (DROP_HINTS.test(p)) continue;
-    if (!KEEP_HINTS.test(p)) continue;
-    const key = p.replace(/[^a-z0-9]/g, "");
-    if (seen.has(key)) continue;
-    seen.add(key);
-    const short = line.length > 140 ? line.slice(0, 137).replace(/\s+\S*$/, "") + "…" : line;
-    kept.push(short.charAt(0).toUpperCase() + short.slice(1));
-    if (kept.length >= maxLines) break;
-  }
-  return formatNoteSections(kept);
+/** Tiêu đề mục trong bài gốc → mục tương ứng của khung chuẩn. */
+function headingSection(p: string): SectionKey | null {
+  if (/tinh phi|co phi|dich vu/.test(p)) return "paid";
+  if (/tien ich|mien phi/.test(p)) return "amenity";
+  if (/luu y|chinh sach|noi quy|quy dinh/.test(p)) return "policy";
+  if (/vi tri|dia chi|view/.test(p)) return "location";
+  if (/suc chua|tieu chuan|phu thu/.test(p)) return "capacity";
+  if (/thong tin|chi tiet|khong gian|phong|ket cau|cau truc/.test(p)) return "space";
+  return null;
 }
 
-// ---------------------------------------------------------------------------
-// KHUNG NỘI DUNG ĐỒNG NHẤT cho mọi căn: chia mục cố định, mỗi dòng 1 sticker
-// đúng nghĩa (🏊 hồ bơi, 🎤 karaoke, 🍖 BBQ...). Dùng cho bản lọc miễn phí;
-// bản AI cũng được yêu cầu viết theo đúng khung này.
-// ---------------------------------------------------------------------------
-export const NOTE_SECTIONS = [
-  { key: "space", title: "🏡 KHÔNG GIAN" },
-  { key: "amenity", title: "🎉 TIỆN ÍCH" },
-  { key: "location", title: "📍 VỊ TRÍ & VIEW" },
-  { key: "time", title: "⏰ NHẬN – TRẢ PHÒNG" },
-  { key: "policy", title: "📌 CHÍNH SÁCH" },
-  { key: "other", title: "✨ ĐIỂM CỘNG" },
-] as const;
-type SectionKey = (typeof NOTE_SECTIONS)[number]["key"];
-const SECTION_TITLES_PLAIN = new Set(
-  NOTE_SECTIONS.map((x) => plainVN(x.title).replace(/[^a-z ]/g, "").replace(/\s+/g, " ").trim())
-);
+/** Dòng có phải tiêu đề mục (VD "☀️ Tiện ích miễn phí :") không. */
+function asHeading(clean: string): SectionKey | "unknown" | null {
+  const m = clean.match(/^(.{2,40}?)\s*:\s*$/);
+  if (!m) return null;
+  return headingSection(plainVN(m[1])) ?? "unknown";
+}
 
-/** Thứ tự kiểm tra quan trọng: dòng khớp mục nào trước thì vào mục đó. */
-const RULES: { section: SectionKey; re: RegExp; icon: string }[] = [
-  { section: "time", re: /check ?in|check ?out|nhan phong|tra phong/, icon: "🕑" },
-  { section: "policy", re: /phu thu|phi /, icon: "💵" },
-  { section: "policy", re: /dat coc|\bcoc\b|huy phong|\bhuy\b|hoan/, icon: "🧾" },
-  { section: "policy", re: /tre em|tre nho|em be/, icon: "👶" },
-  { section: "policy", re: /thu cung|\bpet\b|cho meo/, icon: "🐾" },
-  { section: "policy", re: /khong (duoc|hut|mang)|cam |luu y|noi quy/, icon: "⚠️" },
-  { section: "amenity", re: /be boi|ho boi|pool|tran bo|vo cuc/, icon: "🏊" },
-  { section: "amenity", re: /karaoke|hat |loa|am thanh|dan /, icon: "🎤" },
-  { section: "amenity", re: /bbq|nuong/, icon: "🍖" },
-  { section: "amenity", re: /bida|bi-a|billiard/, icon: "🎱" },
-  { section: "amenity", re: /pickleball|tennis|cau long|bong ban|the thao|golf/, icon: "🏓" },
-  { section: "amenity", re: /jacuzzi|bon tam|xong hoi|spa|sauna/, icon: "🛁" },
-  { section: "amenity", re: /cau truot|san choi|tre em choi|xich du/, icon: "🛝" },
-  { section: "amenity", re: /bep|nau an|lo nuong|tu lanh|dung cu/, icon: "🍳" },
-  { section: "amenity", re: /wifi|tivi|\btv\b|netflix|dieu hoa|nong lanh/, icon: "📺" },
-  { section: "amenity", re: /lua trai|dot lua|camping|cam trai/, icon: "🔥" },
-  { section: "amenity", re: /xe dien|xe dap|bai do|do xe|o to/, icon: "🚗" },
-  { section: "space", re: /phong ngu|\bpn\b|giuong|nem/, icon: "🛏️" },
-  { section: "space", re: /\bwc\b|toilet|nha ve sinh|phong tam/, icon: "🚿" },
-  { section: "space", re: /phong khach|sanh|tang|lau|dien tich|m2|san vuon|khuon vien|ban cong/, icon: "🏠" },
-  { section: "space", re: /\bkhach\b|nguoi|suc chua/, icon: "👨‍👩‍👧‍👦" },
-  { section: "location", re: /view|nhin ra|huong/, icon: "🌅" },
-  { section: "location", re: /ven ho|ho\b|bien|nui|doi|rung|suoi/, icon: "🏞️" },
-  { section: "location", re: /cach|km|phut|gan|trung tam|di bo/, icon: "📍" },
+// Mục ƯU TIÊN theo nội dung (thắng cả tiêu đề gốc): sức chứa, giờ, cọc/huỷ...
+const PRIORITY: { section: SectionKey; re: RegExp }[] = [
+  { section: "time", re: /check ?in|check ?out|nhan phong|tra phong/ },
+  { section: "capacity", re: w("tieu chuan|toi da|phu thu|nguoi lon|suc chua|tre em|tre nho|tre duoi") },
+  { section: "policy", re: w("dat coc|coc|huy phong|hoan coc|thu cung|pet|khong duoc|cam|luu y|noi quy") },
+  { section: "location", re: w("tap hoa|sieu thi|toa lac|nam tren|nam o|cach|km") },
+];
+// Mục ĐOÁN theo nội dung (khi bài gốc không có tiêu đề mục)
+const GUESS: { section: SectionKey; re: RegExp }[] = [
+  { section: "paid", re: /\d+\s*k(?![a-z])|\/ ?(gio|tui|nguoi|suat)|tinh phi|thuong luong|bao gia/ },
+  { section: "amenity", re: w("be boi|ho boi|karaoke|loa|bbq|nuong|bida|bi lac|pickleball|tennis|jacuzzi|xong hoi|san choi|cau truot|lua trai") },
+  { section: "space", re: w("\\d+ ?pn|phong ngu|giuong|wc|toilet|bungalow|phong khach|bep|dem|sofa|sofabed|tang|master") },
+  { section: "location", re: w("view|nhin|huong|doi|nui|ho|bien|rung|suoi") },
 ];
 
-function classify(line: string): { section: SectionKey; icon: string } {
-  const p = plainVN(line);
-  for (const r of RULES) if (r.re.test(p)) return { section: r.section, icon: r.icon };
-  return { section: "other", icon: "✨" };
+const ICONS: [RegExp, string][] = [
+  [/check ?in|check ?out|nhan phong|tra phong/, "🕑"],
+  [w("phu thu"), "💵"],
+  [w("tieu chuan|toi da|nguoi lon|suc chua"), "👥"],
+  [w("tre em|em be"), "👶"],
+  [w("dat coc|coc|huy|hoan"), "🧾"],
+  [w("thu cung|pet"), "🐾"],
+  [w("\\d+ ?pn|phong ngu|master"), "🛏️"],
+  [w("bungalow"), "🛖"],
+  [w("giuong|dem|topper|sofabed|nem"), "🛏️"],
+  [w("wc|toilet|nha ve sinh|sua tam|dau goi|may say|bon tam"), "🚿"],
+  [w("don dep|rua bat"), "🧹"],
+  [w("bbq|nuong"), "🍖"],
+  [w("phong bep|bep tu|bep ga|bep|tu lanh|noi xoong|xoong|bat dua"), "🍳"],
+  [w("phong khach|sofa|tv|tivi|smarttv|smart tv"), "🛋️"],
+  [w("be boi|ho boi"), "🏊"],
+  [w("karaoke|loa keo|loa"), "🎤"],
+  [w("bi lac"), "⚽"],
+  [w("bida|bi a"), "🎱"],
+  [w("pickleball|tennis|cau long"), "🏓"],
+  [w("jacuzzi|xong hoi|spa"), "🛁"],
+  [w("than|da"), "🧊"],
+  [w("them gio"), "⏱️"],
+  [w("menu|nha hang|di cho|an uong|do an"), "🍽️"],
+  [w("tap hoa|sieu thi"), "🛒"],
+  [w("nui|doi|ba vi|tam dao"), "⛰️"],
+  [w("ho|bien|suoi"), "🌊"],
+  [w("dien tich|m2"), "📐"],
+  [w("cach|km|phut"), "📍"],
+  [w("khach|nguoi|doan"), "👥"],
+];
+function iconFor(p: string): string {
+  for (const [re, icon] of ICONS) if (re.test(p)) return icon;
+  return "▫️";
 }
 
-/** Xếp các ý vào khung mục cố định, mỗi ý 1 sticker. */
-export function formatNoteSections(lines: string[]): string {
+function cleanLine(l: string): string {
+  return l
+    .replace(/#[\p{L}\p{N}_]+/gu, " ")
+    .replace(/[\p{Extended_Pictographic}\u{FE0F}\u{200D}\u{2600}-\u{27BF}]/gu, " ")
+    .replace(/^[\s\-–—•*+>✓✔·.,;|]+/u, "")
+    .replace(/\s+:\s*/g, ": ")
+    .replace(/([!?.~])\1+/g, "$1")
+    .replace(/,?\s*(vui long\s+)?(vui lòng\s+)?liên hệ( trực tiếp)?[^,.]*$/iu, "")
+    .replace(/[\s,.;:]+$/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+/** Trích nhanh các con số khách hay hỏi nhất. */
+function overviewLine(allPlain: string): string | null {
+  const pn = allPlain.match(/(\d+)\s*(?:pn|phong ngu)(?![a-z])/);
+  const wc = allPlain.match(/(\d+)\s*(?:wc|toilet|nha ve sinh)(?![a-z])/);
+  const stdAfter = allPlain.match(/tieu chuan([^\d]{0,12})(\d+)/);
+  const std =
+    allPlain.match(/(\d+)\s*(?:khach|nguoi lon|nguoi)\s*tieu chuan/) ??
+    (stdAfter && !/toi da/.test(stdAfter[1]) ? [stdAfter[0], stdAfter[2]] : null) ??
+    allPlain.match(/(\d+)\s*nguoi lon/);
+  const max = allPlain.match(/toi da[^\d]{0,20}(\d+)/);
+  const area = allPlain.match(/dien tich[^\d]{0,25}(\d[\d.,]*)\s*m2/);
+  const parts = [
+    pn ? `🛏️ ${pn[1]} phòng ngủ` : "",
+    wc ? `🚿 ${wc[1]} WC` : "",
+    std ? `👥 ${std[1]} khách${max ? ` (tối đa ${max[1]})` : ""}` : max ? `👥 Tối đa ${max[1]} khách` : "",
+    area ? `📐 ~${area[1]}m2` : "",
+  ].filter(Boolean);
+  return parts.length ? parts.join(" · ") : null;
+}
+
+export function summarizeNoteBasic(raw: string): string {
+  // NFKC: 𝐌𝐨̣̂𝐭 → Một, 𝑻𝒊𝒆̣̂𝒏 → Tiện (chữ "kiểu" hay dùng trên Facebook)
+  const text = raw.normalize("NFKC").replace(/\r/g, "");
   const buckets = new Map<SectionKey, string[]>();
-  for (const line of lines) {
-    const { section, icon } = classify(line);
-    const text = line.replace(/\.$/, "");
-    buckets.set(section, [...(buckets.get(section) ?? []), `${icon} ${text}`]);
+  const seen = new Set<string>();
+  let forced: SectionKey | null = null;
+
+  for (const rawLine of text.split("\n")) {
+    const cleanedWhole = cleanLine(rawLine);
+    if (!cleanedWhole) continue;
+
+    // Bỏ emoji/ký hiệu đầu dòng nhưng GIỮ dấu ":" cuối để nhận ra tiêu đề mục
+    const headingProbe = rawLine
+      .replace(/[\p{Extended_Pictographic}\u{FE0F}\u{200D}\u{2600}-\u{27BF}]/gu, " ")
+      .replace(/^[\s\-–—•*+>·]+/u, "")
+      .trim();
+    const probePlain = plainVN(cleanedWhole).replace(/[^a-z ]/g, " ").replace(/\s+/g, " ").trim();
+    const known = TITLE_TO_KEY.get(probePlain);
+    if (known) {
+      forced = known;
+      continue;
+    }
+    if (forced === "overview") continue; // dòng tổng quan sẽ được tạo lại
+    const heading = asHeading(headingProbe);
+    if (heading) {
+      forced = heading === "unknown" ? null : heading;
+      continue;
+    }
+    // "Tiêu chuẩn: 14 người lớn..." — phần trước dấu ":" là tiêu đề ngắn có nội dung phía sau
+    const inline = cleanedWhole.match(/^(.{2,25}?):\s+(.+)$/);
+    let lineForced: SectionKey | null = forced;
+    if (inline) {
+      const hs = headingSection(plainVN(inline[1]));
+      if (hs && hs !== "space") lineForced = hs;
+    }
+
+    // tách câu: ". " + chữ hoa/số
+    const sentences = cleanedWhole.split(/(?<=[.!?])\s+(?=[A-ZÀ-Ỹ0-9])/u);
+    for (const sRaw of sentences) {
+      const sLine = cleanLine(sRaw);
+      if (sLine.length < 3) continue;
+      const p = plainVN(sLine);
+      if (DROP.test(p) || URL_OR_PHONE.test(p)) continue;
+      const key = p.replace(/[^a-z0-9]/g, "");
+      if (!key || seen.has(key)) continue;
+
+      let section: SectionKey | null = null;
+      for (const r of PRIORITY) if (r.re.test(p)) { section = r.section; break; }
+      if (!section) section = lineForced;
+      if (!section) for (const r of GUESS) if (r.re.test(p)) { section = r.section; break; }
+      if (!section) continue; // câu văn tả cảm xúc, không có thông tin → bỏ cho gọn
+
+      seen.add(key);
+      const short = sLine.length > 130 ? sLine.slice(0, 127).replace(/\s+\S*$/, "") + "…" : sLine;
+      const pretty = short.charAt(0).toUpperCase() + short.slice(1);
+      buckets.set(section, [...(buckets.get(section) ?? []), `${iconFor(p)} ${pretty}`]);
+    }
   }
-  const blocks: string[] = [];
-  for (const s of NOTE_SECTIONS) {
-    const items = buckets.get(s.key);
-    if (items?.length) blocks.push([s.title, ...items].join("\n"));
+
+  const ov = overviewLine(plainVN(text));
+  if (ov) buckets.set("overview", [ov]);
+
+  // Trong mục phòng: dòng có số phòng ngủ lên đầu
+  const space = buckets.get("space");
+  if (space) {
+    const rank = (l: string) => (/\d+\s*(PN|pn|phòng ngủ)/.test(l) ? 0 : /bungalow|giường|đệm|sofabed/i.test(l) ? 1 : 2);
+    buckets.set("space", [...space].sort((a, b) => rank(a) - rank(b)));
   }
-  return blocks.join("\n\n");
+
+  return NOTE_SECTIONS.filter((s) => buckets.get(s.key)?.length)
+    .map((s) => [s.title, ...buckets.get(s.key)!].join("\n"))
+    .join("\n\n");
 }
 
-/** Dòng tiêu đề mục (VD "🎉 TIỆN ÍCH") — để trang chi tiết in đậm. */
+/** Dòng tiêu đề mục (VD "🎉 TIỆN ÍCH MIỄN PHÍ") — để trang chi tiết in đậm. */
 export function isNoteHeading(line: string): boolean {
   const t = line.trim();
   return NOTE_SECTIONS.some((s) => s.title === t) || /^[^\p{L}\d]*\s?[A-ZÀ-Ỹ0-9 &–\-]{4,}$/u.test(t);
 }
-
