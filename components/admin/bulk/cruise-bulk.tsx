@@ -136,6 +136,7 @@ function isEmptyRow(r: Row): boolean {
 export function CruiseBulk({ mode, initial }: { mode: "edit" | "add"; initial: Cruise[] }) {
   // Bản lịch trình trước khi bấm "Tự tách" — để hoàn tác từng tàu
   const itineraryBackup = useRef(new Map<number, string>());
+  const [aiBusy, setAiBusy] = useState<number | null>(null);
   const counter = useRef(1);
   const nextKey = () => counter.current++;
 
@@ -604,17 +605,44 @@ export function CruiseBulk({ mode, initial }: { mode: "edit" | "add"; initial: C
                               <div className="mt-1.5 flex flex-wrap items-center gap-2">
                                 <button
                                   type="button"
+                                  disabled={!r.itinerary.trim() || aiBusy === r.key}
+                                  onClick={async () => {
+                                    setAiBusy(r.key);
+                                    try {
+                                      const res = await fetch("/api/admin/summarize-itinerary", {
+                                        method: "POST",
+                                        headers: { "Content-Type": "application/json" },
+                                        body: JSON.stringify({ text: r.itinerary }),
+                                      });
+                                      const data = (await res.json()) as { itinerary?: string; engine?: string; aiError?: string; error?: string };
+                                      if (!res.ok || !data.itinerary?.trim()) throw new Error(data.error || "Không rút gọn được");
+                                      itineraryBackup.current.set(r.key, r.itinerary);
+                                      patch(r.key, { itinerary: data.itinerary });
+                                      if (data.engine === "ai") toast.success("AI đã rút gọn lịch trình (đã bỏ giá) — kiểm tra lại rồi Lưu.");
+                                      else toast.warning(`AI chưa chạy (${data.aiError ?? "không rõ lý do"}) — đã dùng bản tách miễn phí.`);
+                                    } catch (e) {
+                                      toast.error(e instanceof Error ? e.message : "Không rút gọn được");
+                                    } finally {
+                                      setAiBusy(null);
+                                    }
+                                  }}
+                                  className="rounded-lg bg-teal px-3 py-1.5 text-[12px] font-bold text-white disabled:opacity-40"
+                                >
+                                  {aiBusy === r.key ? "Đang rút gọn…" : "✨ AI rút gọn lịch trình"}
+                                </button>
+                                <button
+                                  type="button"
                                   disabled={!r.itinerary.trim()}
                                   onClick={() => {
                                     const parsed = parseItinerary(r.itinerary);
                                     if (!parsed.trim()) return void toast.error("Không tìm thấy mốc giờ nào trong nội dung.");
                                     itineraryBackup.current.set(r.key, r.itinerary);
                                     patch(r.key, { itinerary: parsed });
-                                    toast.success("Đã tách lịch trình (đã bỏ phần giá) — kiểm tra lại rồi Lưu.");
+                                    toast.success("Đã tách lịch trình (miễn phí, đã bỏ giá) — kiểm tra lại rồi Lưu.");
                                   }}
-                                  className="rounded-lg bg-teal px-3 py-1.5 text-[12px] font-bold text-white disabled:opacity-40"
+                                  className="rounded-lg border border-border bg-white px-3 py-1.5 text-[12px] font-bold text-ink disabled:opacity-40"
                                 >
-                                  ✨ Tự tách lịch trình
+                                  Tách nhanh (không AI)
                                 </button>
                                 {itineraryBackup.current.has(r.key) && (
                                   <button
@@ -628,7 +656,7 @@ export function CruiseBulk({ mode, initial }: { mode: "edit" | "add"; initial: C
                                     Hoàn tác
                                   </button>
                                 )}
-                                <span className="text-[11px] text-ink-muted">Miễn phí, không dùng AI</span>
+                                <span className="text-[11px] text-ink-muted">AI dùng Gemini miễn phí; hết lượt tự chuyển sang tách nhanh</span>
                               </div>
                             </Field>
                             <div className="mt-3">

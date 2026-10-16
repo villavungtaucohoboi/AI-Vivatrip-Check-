@@ -47,6 +47,16 @@ function stripPrice(line: string): string {
     .trim();
 }
 
+/** Rút ngắn câu dài: giữ ý đầu (đến dấu ":" / "." / "–" đầu tiên nếu đủ nghĩa), tối đa ~90 ký tự. */
+function shorten(text: string): string {
+  let t = text.trim();
+  const firstStop = t.search(/[.;]\s|:\s|\s[–—-]\s/);
+  if (t.length > 90 && firstStop >= 12) t = t.slice(0, firstStop);
+  t = t.replace(/^(quý khách|du khách|đoàn)\s+/i, "").replace(/[.,;:\s]+$/, "");
+  if (t.length > 110) t = t.slice(0, 107).replace(/\s+\S*$/, "") + "…";
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
 export function parseItinerary(raw: string): string {
   const out: { time: string; text: string }[] = [];
   for (const rawLine of raw.replace(/\r/g, "").split("\n")) {
@@ -58,7 +68,7 @@ export function parseItinerary(raw: string): string {
     if (!noPrice || noPrice.length < 3) continue;
     if (noPrice !== line && PRICE.test(noPrice)) continue;
     // Tiêu đề viết HOA toàn bộ / có chữ "lịch trình" và chưa có mốc giờ → bỏ
-    if (!out.length && (/lịch trình|chương trình/iu.test(noPrice) || noPrice === noPrice.toUpperCase())) continue;
+    if (!out.length && (/lịch trình|chương trình/iu.test(noPrice) || (/\p{L}{3}/u.test(noPrice) && noPrice === noPrice.toUpperCase()))) continue;
 
     const lineX = noPrice;
     const day = lineX.match(DAY);
@@ -67,8 +77,9 @@ export function parseItinerary(raw: string): string {
       continue;
     }
     const t = lineX.match(TIME);
-    if (t && t[2]) {
-      out.push({ time: normTime(t[1]), text: t[2] });
+    if (t) {
+      // Giờ nằm 1 dòng riêng ("09:00") → nội dung ở dòng kế tiếp sẽ được điền vào
+      out.push({ time: normTime(t[1]), text: t[2] ?? "" });
       continue;
     }
     const pod = lineX.match(PART_OF_DAY);
@@ -78,13 +89,14 @@ export function parseItinerary(raw: string): string {
     }
     // Dòng không có giờ: nối vào mốc phía trên (nếu có), không thì thành 1 mốc không giờ
     const last = out[out.length - 1];
-    if (last && !/^NGÀY/.test(last.time)) last.text = last.text ? `${last.text}, ${lineX.charAt(0).toLowerCase()}${lineX.slice(1)}` : lineX;
+    if (last && !last.text) last.text = lineX;
+    else if (last && !/^NGÀY/.test(last.time)) last.text = last.text ? `${last.text}, ${lineX.charAt(0).toLowerCase()}${lineX.slice(1)}` : lineX;
     else if (last && /^NGÀY/.test(last.time) && !last.text) last.text = lineX;
     else out.push({ time: "", text: lineX });
   }
   return out
     .map(({ time, text }) => {
-      const tx = text.length > 160 ? text.slice(0, 157).replace(/\s+\S*$/, "") + "…" : text;
+      const tx = shorten(text);
       return time ? (tx ? `${time} | ${tx}` : time) : tx;
     })
     .join("\n");

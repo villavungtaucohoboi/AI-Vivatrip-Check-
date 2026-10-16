@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { summarizeNoteBasic } from "@/lib/villa-text";
+import { callAI, cleanAIOutput } from "@/lib/ai-text";
 
 // Rút gọn nội dung căn khi Admin dán nguyên bài từ chủ nhà / Facebook / Zalo.
 // - Có biến môi trường ANTHROPIC_API_KEY (Vercel → Settings → Environment
@@ -35,58 +36,9 @@ export async function POST(req: NextRequest) {
   const raw = (text ?? "").trim();
   if (!raw) return NextResponse.json({ error: "Chưa có nội dung để rút gọn." }, { status: 400 });
 
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (key) {
-    try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-api-key": key,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify({
-          model: process.env.ANTHROPIC_MODEL || "claude-haiku-4-5",
-          max_tokens: 700,
-          messages: [{ role: "user", content: `${PROMPT}\n\nNỘI DUNG GỐC:\n"""\n${raw.slice(0, 12000)}\n"""` }],
-        }),
-      });
-      if (res.ok) {
-        const data = (await res.json()) as { content?: { type: string; text?: string }[] };
-        const out = data.content?.find((c) => c.type === "text")?.text?.trim();
-        if (out) return NextResponse.json({ summary: out, engine: "ai" });
-      }
-    } catch {
-      // lỗi mạng / hết hạn mức → rơi xuống bản miễn phí
-    }
-  }
-
-  // Gemini (Google AI Studio) — có gói MIỄN PHÍ, giới hạn số lượt/phút & /ngày.
-  const gemini = process.env.GEMINI_API_KEY;
-  if (gemini) {
-    try {
-      const model = process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(gemini)}`,
-        {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ role: "user", parts: [{ text: `${PROMPT}\n\nNỘI DUNG GỐC:\n"""\n${raw.slice(0, 12000)}\n"""` }] }],
-            generationConfig: { maxOutputTokens: 800, temperature: 0.2 },
-          }),
-        }
-      );
-      if (res.ok) {
-        const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
-        const out = data.candidates?.[0]?.content?.parts?.map((x) => x.text ?? "").join("").trim();
-        if (out) return NextResponse.json({ summary: out, engine: "ai" });
-      }
-    } catch {
-      // hết lượt miễn phí / lỗi mạng → dùng bản lọc miễn phí bên dưới
-    }
-  }
+  const ai = await callAI(PROMPT, raw, 800);
+  if (ai.text) return NextResponse.json({ summary: cleanAIOutput(ai.text), engine: "ai" });
 
   const summary = summarizeNoteBasic(raw);
-  return NextResponse.json({ summary: summary || raw, engine: "basic" });
+  return NextResponse.json({ summary: summary || raw, engine: "basic", aiError: ai.error });
 }

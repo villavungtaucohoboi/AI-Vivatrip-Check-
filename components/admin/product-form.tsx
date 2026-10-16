@@ -153,11 +153,12 @@ export function ProductForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: original }),
       });
-      const data = (await res.json()) as { summary?: string; engine?: string; error?: string };
+      const data = (await res.json()) as { summary?: string; engine?: string; error?: string; aiError?: string };
       if (!res.ok || !data.summary) throw new Error(data.error || "Không rút gọn được");
       setNoteBackup(form.note ?? "");
       set("note", data.summary);
-      toast.success(data.engine === "ai" ? "Đã rút gọn bằng AI — kiểm tra lại rồi bấm Lưu." : "Đã rút gọn — kiểm tra lại rồi bấm Lưu.");
+      if (data.engine === "ai") toast.success("Đã rút gọn bằng AI — kiểm tra lại rồi bấm Lưu.");
+      else toast.warning(`AI chưa chạy (${data.aiError ?? "không rõ lý do"}) — đã rút gọn bằng bản miễn phí.`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Không rút gọn được");
     } finally {

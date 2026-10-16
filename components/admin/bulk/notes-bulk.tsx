@@ -32,7 +32,7 @@ function plain(s: string) {
   return s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/gi, "d").toLowerCase();
 }
 
-async function summarize(text: string): Promise<{ summary: string; engine: "ai" | "basic" }> {
+async function summarize(text: string): Promise<{ summary: string; engine: "ai" | "basic"; aiError?: string }> {
   const res = await fetch("/api/admin/summarize-note", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -54,6 +54,7 @@ export function NotesBulk({ initial }: { initial: NoteRow[] }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const cancelRef = useRef(false);
+  const lastAiError = useRef<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const visible = useMemo(() => {
@@ -77,7 +78,8 @@ export function NotesBulk({ initial }: { initial: NoteRow[] }) {
     const source = r.original ?? r.note;
     patch(r.id, { busy: true });
     try {
-      const { summary, engine } = await summarize(source);
+      const { summary, engine, aiError } = await summarize(source);
+      if (engine === "basic" && aiError) lastAiError.current = aiError;
       patch(r.id, { draft: summary, engine, busy: false, pendingOriginal: r.original == null ? r.note : null });
       return true;
     } catch (e) {
@@ -91,6 +93,7 @@ export function NotesBulk({ initial }: { initial: NoteRow[] }) {
     const targets = rows.filter((r) => selected.has(r.id));
     if (!targets.length) return;
     cancelRef.current = false;
+    lastAiError.current = null;
     setProgress({ done: 0, total: targets.length });
     let ok = 0;
     for (let i = 0; i < targets.length; i++) {
@@ -101,6 +104,7 @@ export function NotesBulk({ initial }: { initial: NoteRow[] }) {
     }
     setProgress(null);
     toast.success(`Đã rút gọn ${ok}/${targets.length} căn — xem lại rồi bấm Lưu.`);
+    if (lastAiError.current) toast.warning(`Một số căn dùng bản miễn phí vì AI chưa chạy: ${lastAiError.current}`);
   }
 
   async function saveAll() {
