@@ -70,6 +70,10 @@ export function canShareImages(): boolean {
   }
 }
 
+export async function prepareImageFiles(urls: string[]): Promise<File[]> {
+  return toFiles(urls, "anh");
+}
+
 export async function shareImages(urls: string[], title: string): Promise<void> {
   const files = await toFiles(urls, "anh");
   await navigator.share({ files, title });

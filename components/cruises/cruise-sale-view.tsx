@@ -1,14 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDownUp, CalendarDays, Check, ChevronDown, Clock, Copy, Download, Eye, FolderOpen, ImageIcon, Link2, Loader2, Search, Share2, Star, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/empty-state";
 import { formatVND } from "@/lib/format";
-import { canShareImages, copyImagesCollage, shareImages } from "@/lib/cruise-images";
-import { copyCruiseCardImage, shareOrDownloadCruiseCard } from "@/lib/cruise-card-image";
+import { canShareImages, copyImagesCollage, prepareImageFiles } from "@/lib/cruise-images";
+import { buildCruiseCardImage } from "@/lib/cruise-card-image";
 import {
   CRUISE_CATEGORY_LABEL,
   CRUISE_STARS,
@@ -108,6 +108,20 @@ export function CruiseSaleView({ cruises, single = false }: { cruises: Cruise[];
   const [canShare, setCanShare] = useState(false);
   useEffect(() => setCanShare(canShareImages()), []);
   const [lightbox, setLightbox] = useState<{ images: string[]; index: number } | null>(null);
+  const [preview, setPreview] = useState<{ cruise: Cruise; blob: Blob; url: string } | null>(null);
+  const [canShareFile, setCanShareFile] = useState(false);
+  const [canCopyImage, setCanCopyImage] = useState(false);
+  useEffect(() => {
+    try {
+      setCanShareFile(
+        typeof navigator.canShare === "function" &&
+          navigator.canShare({ files: [new File([""], "a.png", { type: "image/png" })] })
+      );
+    } catch {
+      setCanShareFile(false);
+    }
+    setCanCopyImage(typeof ClipboardItem !== "undefined" && !!navigator.clipboard?.write);
+  }, []);
   const [cat, setCat] = useState<CruiseCategory>("day");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [zipping, setZipping] = useState<string | null>(null);
@@ -201,27 +215,68 @@ export function CruiseSaleView({ cruises, single = false }: { cruises: Cruise[];
   }
 
   /** Gửi lịch trình dạng ẢNH: điện thoại → mở bảng chia sẻ (chọn Zalo); máy tính → copy ảnh, Ctrl+V vào Zalo. */
+  // Bước 1: tạo ảnh rồi mở khung xem trước. Bước 2: Sale tự chọn Chia sẻ /
+  // Copy / Tải về. Tách 2 bước vì điện thoại chỉ cho mở bảng chia sẻ ngay sau
+  // khi bấm — nếu đợi tạo ảnh xong mới chia sẻ thì trình duyệt chặn.
   async function handleItineraryImage(c: Cruise) {
     setImgBusy(`i${c.id}`);
     try {
-      if (canShare) {
-        const r = await shareOrDownloadCruiseCard(c, `Lich-trinh-${slugify(c.name)}`);
-        if (r === "downloaded") toast.success("Đã tải ảnh lịch trình về máy — gửi qua Zalo cho khách.");
-      } else {
-        try {
-          await copyCruiseCardImage(c);
-          toast.success("Đã copy ẢNH lịch trình — mở Zalo bấm Ctrl+V để dán.");
-        } catch {
-          await shareOrDownloadCruiseCard(c, `Lich-trinh-${slugify(c.name)}`);
-          toast.success("Đã tải ảnh lịch trình về máy — kéo thả vào Zalo.");
-        }
-      }
-    } catch (e) {
-      if (!(e instanceof Error && e.name === "AbortError")) toast.error("Không tạo được ảnh lịch trình. Thử lại nhé.");
+      const blob = await buildCruiseCardImage(c);
+      setPreview((old) => {
+        if (old) URL.revokeObjectURL(old.url);
+        return { cruise: c, blob, url: URL.createObjectURL(blob) };
+      });
+    } catch {
+      toast.error("Không tạo được ảnh lịch trình. Thử lại nhé.");
     } finally {
       setImgBusy(null);
     }
   }
+
+  function closePreview() {
+    setPreview((old) => {
+      if (old) URL.revokeObjectURL(old.url);
+      return null;
+    });
+  }
+
+  function previewFile(): File | null {
+    if (!preview) return null;
+    return new File([preview.blob], `Lich-trinh-${slugify(preview.cruise.name)}.png`, { type: "image/png" });
+  }
+
+  async function previewShare() {
+    const file = previewFile();
+    if (!file) return;
+    try {
+      await navigator.share({ files: [file], title: preview!.cruise.name });
+    } catch (e) {
+      if (!(e instanceof Error && e.name === "AbortError")) toast.error("Máy không mở được bảng chia sẻ — dùng nút Tải ảnh về nhé.");
+    }
+  }
+
+  async function previewCopy() {
+    if (!preview) return;
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": preview.blob })]);
+      toast.success("Đã copy ảnh — mở Zalo, bấm giữ ô chat (điện thoại) hoặc Ctrl+V (máy tính) để dán.");
+    } catch {
+      toast.error("Trình duyệt này không cho copy ảnh — dùng Chia sẻ hoặc Tải ảnh về nhé.");
+    }
+  }
+
+  function previewDownload() {
+    const file = previewFile();
+    if (!file) return;
+    const a = document.createElement("a");
+    a.href = preview!.url;
+    a.download = file.name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    toast.success("Đã tải ảnh về máy — vào Zalo chọn ảnh để gửi.");
+  }
+
 
   async function handleCopyText(c: Cruise) {
     await copyText(cruiseQuoteText(c));
@@ -240,16 +295,36 @@ export function CruiseSaleView({ cruises, single = false }: { cruises: Cruise[];
     }
   }
 
+  // Ảnh tàu đã tải sẵn theo từng tàu — lần bấm thứ 2 chia sẻ ngay (điện thoại
+  // chặn bảng chia sẻ nếu phải chờ tải ảnh quá lâu sau khi bấm).
+  const shareFilesCache = useRef(new Map<string, File[]>());
   async function handleShareImages(id: string, name: string, urls: string[]) {
+    const cached = shareFilesCache.current.get(id);
+    if (cached) {
+      try {
+        await navigator.share({ files: cached, title: name });
+      } catch (e) {
+        if (!(e instanceof Error && e.name === "AbortError")) toast.error("Không mở được bảng chia sẻ. Dùng nút Ảnh để copy nhé.");
+      }
+      return;
+    }
     setImgBusy(`s${id}`);
     try {
-      await shareImages(urls, name);
-    } catch (e) {
-      if (!(e instanceof Error && e.name === "AbortError")) toast.error("Không chia sẻ được ảnh. Thử lại hoặc dùng nút Copy ảnh.");
+      const files = await prepareImageFiles(urls);
+      shareFilesCache.current.set(id, files);
+      try {
+        await navigator.share({ files, title: name });
+      } catch (e) {
+        if (e instanceof Error && e.name === "AbortError") return;
+        toast.success("Ảnh đã sẵn sàng — bấm nút Zalo lần nữa để gửi.");
+      }
+    } catch {
+      toast.error("Không tải được ảnh tàu. Thử lại nhé.");
     } finally {
       setImgBusy(null);
     }
   }
+
 
   async function handleZip(targets: Cruise[], zipName: string, busyKey: string) {
     if (targets.length === 0) return;
@@ -558,7 +633,7 @@ export function CruiseSaleView({ cruises, single = false }: { cruises: Cruise[];
                       className="mb-1.5 flex h-10 w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-gradient-to-r from-hot to-coral text-[13px] font-extrabold text-white shadow-sm disabled:opacity-70"
                     >
                       {imgBusy === `i${c.id}` ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarDays className="h-4 w-4" />}
-                      {imgBusy === `i${c.id}` ? "Đang tạo ảnh…" : canShare ? "Gửi lịch trình dạng ảnh (Zalo)" : "Copy ảnh lịch trình"}
+                      {imgBusy === `i${c.id}` ? "Đang tạo ảnh…" : "Ảnh lịch trình gửi khách"}
                     </button>
                     <div className="flex gap-1.5">
                       <button type="button" onClick={() => handleCopy(c)} className="flex h-9 flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-xl bg-teal text-[12px] font-bold text-white">
@@ -663,6 +738,40 @@ export function CruiseSaleView({ cruises, single = false }: { cruises: Cruise[];
           </div>
         )}
       </div>
+      {preview && (
+        <div className="fixed inset-0 z-[60] flex flex-col bg-black/80" onClick={closePreview}>
+          <div className="flex items-center justify-between px-4 py-3 text-white" onClick={(e) => e.stopPropagation()}>
+            <p className="truncate pr-3 text-[14px] font-bold">Ảnh lịch trình · {preview.cruise.name}</p>
+            <button type="button" onClick={closePreview} className="rounded-full bg-white/15 p-2" aria-label="Đóng">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto px-4" onClick={(e) => e.stopPropagation()}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={preview.url} alt="Ảnh lịch trình" className="mx-auto w-full max-w-md rounded-xl shadow-2xl" />
+            <p className="mx-auto mt-2 max-w-md pb-4 text-center text-[12px] text-white/70">
+              Mẹo: trên điện thoại có thể bấm giữ vào ảnh để Lưu ảnh / Sao chép.
+            </p>
+          </div>
+          <div className="border-t border-white/10 bg-white px-4 pb-[max(12px,env(safe-area-inset-bottom))] pt-3" onClick={(e) => e.stopPropagation()}>
+            <div className="mx-auto grid max-w-md gap-2" style={{ gridTemplateColumns: `repeat(${1 + (canShareFile ? 1 : 0) + (canCopyImage ? 1 : 0)}, minmax(0, 1fr))` }}>
+              {canShareFile && (
+                <button type="button" onClick={previewShare} className="flex h-11 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-teal to-sand text-[13px] font-bold text-white">
+                  <Share2 className="h-4 w-4" /> Chia sẻ Zalo
+                </button>
+              )}
+              {canCopyImage && (
+                <button type="button" onClick={previewCopy} className="flex h-11 items-center justify-center gap-1.5 rounded-xl border border-border bg-white text-[13px] font-bold text-ink">
+                  <Copy className="h-4 w-4" /> Copy ảnh
+                </button>
+              )}
+              <button type="button" onClick={previewDownload} className="flex h-11 items-center justify-center gap-1.5 rounded-xl border border-border bg-white text-[13px] font-bold text-ink">
+                <Download className="h-4 w-4" /> Tải ảnh về
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {lightbox && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4" onClick={() => setLightbox(null)}>
           <button type="button" className="absolute right-4 top-4 rounded-full bg-white/90 p-2" aria-label="Đóng"><X className="h-5 w-5" /></button>
