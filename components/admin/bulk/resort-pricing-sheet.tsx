@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, ClipboardPaste, ImagePlus, Loader2, Plus, Sparkles, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { BulkSaveBar, NumCell, useUnsavedGuard } from "@/components/admin/bulk/bulk-ui";
+import { ResortImagesManager } from "@/components/admin/bulk/resort-images-manager";
 import { compressImage } from "@/lib/compress-image";
 import { getPeriods, getRoomPrices, parseRanges, rangesToText } from "@/lib/resort-pricing";
 import { cn } from "@/lib/utils";
@@ -202,7 +203,17 @@ function applyAI(b: Block, ai: AIRes): Block {
   };
 }
 
-export function ResortPricingSheet({ resorts, rates, openNew = false }: { resorts: ResortRow[]; rates: HotelRate[]; openNew?: boolean }) {
+export function ResortPricingSheet({
+  resorts,
+  rates,
+  images = {},
+  openNew = false,
+}: {
+  resorts: ResortRow[];
+  rates: HotelRate[];
+  images?: Record<string, string[]>;
+  openNew?: boolean;
+}) {
   const [blocks, setBlocks] = useState<Block[]>(() => resorts.map((p) => fromProduct(p, rates)));
   const [origin, setOrigin] = useState<Record<string, string>>(() =>
     Object.fromEntries(resorts.map((p) => [p.id, snap(fromProduct(p, rates))]))
@@ -539,6 +550,13 @@ export function ResortPricingSheet({ resorts, rates, openNew = false }: { resort
                         className={cn(inp, "h-auto border-dashed border-amber-300 bg-amber-50/60 py-2")}
                       />
                     </Field>
+                  </div>
+                  <div className="border-t border-border pt-3 lg:col-span-2">
+                    {b.id ? (
+                      <ResortImagesManager productId={b.id} initial={images[b.id] ?? []} />
+                    ) : (
+                      <p className="text-[12px] text-ink-muted">📷 Bấm <b>Lưu tất cả</b> trước, sau đó mở lại khung này để tải ảnh lên.</p>
+                    )}
                   </div>
                 </div>
               )}

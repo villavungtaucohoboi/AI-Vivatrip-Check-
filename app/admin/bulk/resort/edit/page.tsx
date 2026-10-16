@@ -17,7 +17,16 @@ export default async function ResortBulkEditPage({ searchParams }: { searchParam
     .order("product_name");
 
   const ids = (resorts ?? []).map((r) => r.id as string);
-  const { data: rates } = ids.length ? await supabase.from("hotel_rates").select("*").in("product_id", ids) : { data: [] };
+  const [{ data: rates }, { data: imgs }] = ids.length
+    ? await Promise.all([
+        supabase.from("hotel_rates").select("*").in("product_id", ids),
+        supabase.from("product_images").select("product_id, image_url, sort_order").in("product_id", ids).order("sort_order"),
+      ])
+    : [{ data: [] }, { data: [] }];
+  const images: Record<string, string[]> = {};
+  for (const im of (imgs ?? []) as { product_id: string; image_url: string }[]) {
+    (images[im.product_id] ??= []).push(im.image_url);
+  }
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
@@ -25,7 +34,7 @@ export default async function ResortBulkEditPage({ searchParams }: { searchParam
         title="Resort · Khách sạn · Homestay — Bảng giá"
         subtitle="Mỗi nơi tự khai các GIAI ĐOẠN giá (thường, cao điểm, đỉnh điểm, lễ Tết…) với khoảng ngày riêng. Dán hợp đồng / ảnh bảng giá để AI điền sẵn, xem lại rồi Lưu."
       />
-      <ResortPricingSheet resorts={(resorts ?? []) as ResortRow[]} rates={(rates ?? []) as HotelRate[]} openNew={sp.new === "1"} />
+      <ResortPricingSheet resorts={(resorts ?? []) as ResortRow[]} rates={(rates ?? []) as HotelRate[]} images={images} openNew={sp.new === "1"} />
     </main>
   );
 }
