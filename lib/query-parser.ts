@@ -125,6 +125,30 @@ function parseDate(norm: string, now: Date): string | undefined {
   return undefined;
 }
 
+const RANGE_RE =
+  /\b(?:tu\s+)?(\d{1,2})(?:\s*\/\s*(\d{1,2}))?\s*(?:-|–|den|toi|->)\s*(\d{1,2})\s*\/\s*(\d{1,2})(?:\s*\/\s*(\d{2,4}))?\b/;
+
+/** "10-12/10" | "10/10-12/10" | "tu 30/9 den 2/10" → { checkin, checkout } */
+function parseDateRange(norm: string, now: Date): { checkin: string; checkout: string } | undefined {
+  const m = norm.match(RANGE_RE);
+  if (!m) return undefined;
+  const d1 = parseInt(m[1], 10);
+  const m2 = parseInt(m[4], 10);
+  const m1 = m[2] ? parseInt(m[2], 10) : m2;
+  const d2 = parseInt(m[3], 10);
+  let year = m[5] ? parseInt(m[5], 10) : now.getFullYear();
+  if (year < 100) year += 2000;
+  if (!(d1 >= 1 && d1 <= 31 && d2 >= 1 && d2 <= 31 && m1 >= 1 && m1 <= 12 && m2 >= 1 && m2 <= 12)) return undefined;
+  let a = new Date(year, m1 - 1, d1);
+  let b = new Date(m1 > m2 ? year + 1 : year, m2 - 1, d2);
+  if (!m[5] && b < startOfDay(now)) {
+    a = new Date(year + 1, m1 - 1, d1);
+    b = new Date(m1 > m2 ? year + 2 : year + 1, m2 - 1, d2);
+  }
+  if (b <= a) return undefined;
+  return { checkin: toISO(a), checkout: toISO(b) };
+}
+
 function startOfDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
@@ -149,10 +173,14 @@ export function parseQuery(
   const filters: SearchFilters = {};
   if (!rawQuery || !rawQuery.trim()) return filters;
 
-  const norm = normalize(rawQuery);
+  // "1tr2" / "1 trieu 2" → "1.2 trieu" để đọc đúng ngân sách
+  const norm = normalize(rawQuery).replace(/(\d+)\s*(?:tr|trieu)\s*(\d{1,3})(?!\d)/g, "$1.$2 trieu");
 
-  const date = parseDate(norm, now);
+  // Khoảng ngày ở: "10-12/10", "10/10-12/10", "tu 10/10 den 12/10" → ngày đi + ngày về
+  const range = parseDateRange(norm, now);
+  const date = range?.checkin ?? parseDate(norm, now);
   if (date) filters.date = date;
+  if (range) filters.checkout = range.checkout;
 
   // Khung giá khách hỏi chung chung (không có ngày cụ thể) → để tô đỏ trên thẻ
   if (!date) {
@@ -254,6 +282,7 @@ export function parseQuery(
     if (filters.type === type) keywords.forEach((k) => (remainder = remainder.replace(k, " ")));
   }
   remainder = remainder
+    .replace(new RegExp(RANGE_RE.source, "g"), " ")
     .replace(/\b(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?\b/g, " ")
     .replace(/\bhom nay\b|\bngay mai\b|\bngay kia\b|\bthu\s*[2-7]\b|\bchu nhat\b|\btuan sau\b|\btuan nay\b/g, " ")
     .replace(/(\d+[.,]?\d*)\s*(ty|tr\b|trieu|k\b|nghin|ngan)/g, " ")
@@ -264,6 +293,7 @@ export function parseQuery(
     .forEach((k) => (remainder = remainder.replace(k, " ")));
 
   const nameWords = remainder
+    .replace(/[\/|,;:()]/g, " ")
     .split(/\s+/)
     .map((w) => w.trim())
     .filter((w) => w.length >= 2 && !STOPWORDS.has(w) && !/^\d+$/.test(w));

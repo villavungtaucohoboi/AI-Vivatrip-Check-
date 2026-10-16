@@ -1,32 +1,30 @@
 import { createClient } from "@/lib/supabase/server";
 import { BulkPageHeader } from "@/components/admin/bulk/bulk-ui";
-import { ResortBulkEdit, type RateSource, type ResortSource } from "@/components/admin/bulk/resort-bulk-edit";
+import { ResortPricingSheet, type ResortRow } from "@/components/admin/bulk/resort-pricing-sheet";
+import type { HotelRate } from "@/lib/types";
+
+export const dynamic = "force-dynamic";
 
 export default async function ResortBulkEditPage() {
   const supabase = await createClient();
+  // select("*") để vẫn chạy khi chưa chạy SQL 0026 (các cột mới sẽ là undefined)
   const { data: resorts } = await supabase
     .from("products")
-    .select("id, product_code, product_name, area, type")
+    .select("*")
     .in("type", ["resort", "hotel"])
     .order("area")
     .order("product_name");
 
   const ids = (resorts ?? []).map((r) => r.id as string);
-  const { data: rates } = ids.length
-    ? await supabase
-        .from("hotel_rates")
-        .select("id, product_id, room_type, price, capacity, extra_bed_price, breakfast")
-        .in("product_id", ids)
-        .order("price")
-    : { data: [] };
+  const { data: rates } = ids.length ? await supabase.from("hotel_rates").select("*").in("product_id", ids) : { data: [] };
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
+    <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
       <BulkPageHeader
-        title="Resort / Hotel — Sửa giá hàng loạt"
-        subtitle="Mỗi hạng phòng là 1 dòng ngay dưới tên resort. Sửa giá, sức chứa, extra bed, ăn sáng rồi bấm Lưu tất cả 1 lần. Giá thấp nhất của resort tự cập nhật theo."
+        title="Resort / Khách sạn — Bảng giá hàng loạt"
+        subtitle="Mỗi resort là 1 khung: hạng phòng × 5 mức giá (thấp/cao điểm × ngày thường/cuối tuần + lễ Tết). Bấm “AI điền từ hợp đồng / ảnh” để AI tự nhập, xem lại rồi Lưu tất cả."
       />
-      <ResortBulkEdit resorts={(resorts ?? []) as ResortSource[]} rates={(rates ?? []) as RateSource[]} />
+      <ResortPricingSheet resorts={(resorts ?? []) as ResortRow[]} rates={(rates ?? []) as HotelRate[]} />
     </main>
   );
 }

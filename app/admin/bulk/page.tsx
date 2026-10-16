@@ -17,7 +17,7 @@ const SECTIONS = [
   {
     key: "resort",
     title: "Resort / Hotel",
-    desc: "Nhiều hạng phòng mỗi nơi: giá/đêm, sức chứa, extra bed, ăn sáng, tiện ích, ảnh.",
+    desc: "Hạng phòng × 5 mức giá theo mùa, phụ thu, tóm tắt hợp đồng. Có AI đọc hợp đồng / ảnh bảng giá để tự điền.",
     icon: Building2,
   },
 ] as const;

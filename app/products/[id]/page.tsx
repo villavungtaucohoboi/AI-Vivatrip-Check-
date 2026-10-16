@@ -21,7 +21,7 @@ import { NoteView } from "@/components/note-view";
 import { ProductGallery } from "@/components/product-gallery";
 import { CopyButton } from "@/components/copy-button";
 import { DownloadImagesButton } from "@/components/download-images-button";
-import { RoomTierCards } from "@/components/room-tier-cards";
+import { ResortDetailPanel } from "@/components/resort/resort-detail-panel";
 import { VillaPricingTable } from "@/components/villa-pricing-table";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -56,10 +56,10 @@ export default async function ProductDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ date?: string; guests?: string }>;
+  searchParams: Promise<{ date?: string; guests?: string; checkout?: string }>;
 }) {
   const { id } = await params;
-  const { date, guests } = await searchParams;
+  const { date, checkout } = await searchParams;
   const supabase = createPublicClient();
 
   const { data: productRow } = await supabase.from("products").select("*").eq("id", id).single();
@@ -77,11 +77,9 @@ export default async function ProductDetailPage({
       .eq("product_id", id)
       .order("sort_order", { ascending: true }),
     !isVilla
-      ? supabase.from("hotel_rates").select("*").eq("product_id", id).order("price")
+      ? supabase.from("hotel_rates").select("*").eq("product_id", id).order("sort_order").order("price")
       : Promise.resolve({ data: [] as HotelRate[] }),
-    isVilla
-      ? supabase.from("holidays").select("*")
-      : Promise.resolve({ data: [] as Holiday[] }),
+    supabase.from("holidays").select("*"),
   ]);
 
   const gallery: ProductImage[] = images?.length
@@ -113,8 +111,8 @@ export default async function ProductDetailPage({
           <Badge variant="neutral" className="mb-2">
             {PRODUCT_TYPE_LABEL[product.type]}
           </Badge>
-          <h1 className="font-display text-2xl text-ink">{product.product_name}</h1>
-          <p className="mt-1 flex items-center gap-1.5 text-sm text-ink-muted">
+          <h1 className="font-display text-2xl font-bold text-ink">{product.product_name}</h1>
+          <p className="mt-1 flex items-center gap-1.5 text-sm font-medium text-teal">
             <MapPin className="h-4 w-4" />
             {product.address || product.area}
           </p>
@@ -148,28 +146,24 @@ export default async function ProductDetailPage({
         )}
 
         <div className="mt-5">
-          <h2 className="mb-2 text-[13px] font-bold tracking-wide text-ink-muted">
-            CHỌN HẠNG PHÒNG {rates?.length ? `(${rates.length} hạng)` : ""}
-          </h2>
-          <RoomTierCards
+          <ResortDetailPanel
+            product={product}
             rates={(rates ?? []) as HotelRate[]}
-            requestedGuests={guests ? Number(guests) : undefined}
+            holidays={(holidays ?? []) as Holiday[]}
+            images={gallery.map((g) => g.image_url)}
+            initialCheckin={date}
+            initialCheckout={checkout}
           />
         </div>
 
-        <div className="mt-5 flex flex-wrap gap-3">
-          {gallery.length > 0 && (
-            <DownloadImagesButton images={gallery} productName={product.product_name} />
-          )}
-          {product.google_maps_url && (
-            <a href={product.google_maps_url} target="_blank" rel="noopener noreferrer">
-              <Button variant="outline" className="w-full sm:w-auto">
-                <ExternalLink className="h-4 w-4" />
-                Xem trên Google Maps
-              </Button>
-            </a>
-          )}
-        </div>
+        {product.google_maps_url && (
+          <a href={product.google_maps_url} target="_blank" rel="noopener noreferrer" className="mt-3 block">
+            <Button variant="outline" className="w-full">
+              <ExternalLink className="h-4 w-4" />
+              Xem trên Google Maps
+            </Button>
+          </a>
+        )}
       </main>
     );
   }

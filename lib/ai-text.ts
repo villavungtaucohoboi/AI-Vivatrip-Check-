@@ -6,8 +6,20 @@ import "server-only";
  * Không có key / lỗi / hết lượt → trả về text = null kèm lý do, để nơi gọi
  * tự dùng bản xử lý miễn phí.
  */
-export async function callAI(prompt: string, raw: string, maxTokens = 900): Promise<{ text: string | null; error?: string }> {
-  const content = `${prompt}\n\nNỘI DUNG GỐC:\n"""\n${raw.slice(0, 12000)}\n"""`;
+export interface AIImage {
+  mime: string; // image/jpeg | image/png | image/webp
+  data: string; // base64 (không kèm "data:...;base64,")
+}
+
+export async function callAI(
+  prompt: string,
+  raw: string,
+  maxTokens = 900,
+  opts: { image?: AIImage; json?: boolean } = {}
+): Promise<{ text: string | null; error?: string }> {
+  const content = raw.trim()
+    ? `${prompt}\n\nNỘI DUNG GỐC:\n"""\n${raw.slice(0, 20000)}\n"""`
+    : prompt;
   let error: string | undefined;
 
   const claude = process.env.ANTHROPIC_API_KEY;
@@ -19,7 +31,17 @@ export async function callAI(prompt: string, raw: string, maxTokens = 900): Prom
         body: JSON.stringify({
           model: process.env.ANTHROPIC_MODEL || "claude-haiku-4-5",
           max_tokens: maxTokens,
-          messages: [{ role: "user", content }],
+          messages: [
+            {
+              role: "user",
+              content: opts.image
+                ? [
+                    { type: "image", source: { type: "base64", media_type: opts.image.mime, data: opts.image.data } },
+                    { type: "text", text: content },
+                  ]
+                : content,
+            },
+          ],
         }),
       });
       if (res.ok) {
@@ -42,8 +64,19 @@ export async function callAI(prompt: string, raw: string, maxTokens = 900): Prom
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
-            contents: [{ role: "user", parts: [{ text: content }] }],
-            generationConfig: { maxOutputTokens: maxTokens, temperature: 0.2 },
+            contents: [
+              {
+                role: "user",
+                parts: opts.image
+                  ? [{ inline_data: { mime_type: opts.image.mime, data: opts.image.data } }, { text: content }]
+                  : [{ text: content }],
+              },
+            ],
+            generationConfig: {
+              maxOutputTokens: maxTokens,
+              temperature: 0.1,
+              ...(opts.json ? { responseMimeType: "application/json" } : {}),
+            },
           }),
         }
       );
@@ -71,4 +104,17 @@ export function cleanAIOutput(s: string): string {
     .replace(/^```[a-z]*\n?|```$/gim, "")
     .replace(/^(đây là|dưới đây là|kết quả)[^\n]*:\s*\n/i, "")
     .trim();
+}
+
+/** Lấy object JSON từ câu trả lời của AI (kể cả khi AI bọc trong ```json). */
+export function extractJSON<T>(s: string): T | null {
+  const cleaned = s.replace(/```(?:json)?/gi, "").trim();
+  const start = cleaned.indexOf("{");
+  const end = cleaned.lastIndexOf("}");
+  if (start < 0 || end <= start) return null;
+  try {
+    return JSON.parse(cleaned.slice(start, end + 1)) as T;
+  } catch {
+    return null;
+  }
 }

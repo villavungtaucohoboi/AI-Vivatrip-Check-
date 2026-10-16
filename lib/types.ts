@@ -63,6 +63,11 @@ export interface Product {
   thumbnail_url: string | null;
   created_at: string;
   updated_at: string;
+  // Resort / khách sạn (migration 0026)
+  high_seasons?: { from: string; to: string }[] | null;
+  weekend_nights?: number[] | null;
+  surcharge_note?: string | null;
+  contract_summary?: string | null;
 }
 
 export interface Holiday {
@@ -89,6 +94,16 @@ export interface HotelRate {
   extra_bed_price: number | null;
   note: string | null;
   updated_at: string;
+  // Bảng giá theo mùa (migration 0026) — có thể null với dữ liệu cũ
+  area_m2?: number | null;
+  bed?: string | null;
+  price_low_weekday?: number | null;
+  price_low_weekend?: number | null;
+  price_high_weekday?: number | null;
+  price_high_weekend?: number | null;
+  price_holiday?: number | null;
+  discount_percent?: number | null;
+  sort_order?: number | null;
 }
 
 // Bộ lọc dùng chung cho cả tìm kiếm tự nhiên và bộ lọc thủ công
@@ -108,6 +123,7 @@ export interface SearchFilters {
   priceTo?: number;
   budget?: number; // ngân sách "khoảng X" dùng để xếp hạng theo độ gần giá
   date?: string; // YYYY-MM-DD — "Ngày đi", ảnh hưởng giá villa/resort
+  checkout?: string; // YYYY-MM-DD — ngày trả phòng (resort/khách sạn tính theo số đêm)
   /** Khung giá khách hỏi khi KHÔNG nói ngày cụ thể (VD "cuối tuần", "ngày
    * thường") — chỉ dùng để TÔ ĐỎ dòng giá tương ứng trên thẻ, không lọc. */
   dayTiers?: PriceTier[];

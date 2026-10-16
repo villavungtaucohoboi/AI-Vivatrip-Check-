@@ -10,12 +10,14 @@ export function SearchBar({
   onSubmit,
   onOpenFilters,
   activeFilterCount,
+  placeholder = "VD: Villa Phan Thiết 15 khách khoảng 10 triệu",
 }: {
   value: string;
   onChange: (v: string) => void;
   onSubmit: () => void;
   onOpenFilters: () => void;
   activeFilterCount: number;
+  placeholder?: string;
 }) {
   return (
     <div className="space-y-2.5">
@@ -30,7 +32,7 @@ export function SearchBar({
         <input
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="VD: Villa Phan Thiết 15 khách khoảng 10 triệu"
+          placeholder={placeholder}
           className="h-11 w-full bg-transparent text-[15px] text-ink placeholder:text-ink-muted focus:outline-none"
         />
         {value && (

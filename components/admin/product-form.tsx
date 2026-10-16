@@ -137,6 +137,7 @@ export function ProductForm({
     setForm((f) => ({ ...f, [key]: value }));
   }
 
+  const manageRatesInBulk = isEdit && (rates?.length ?? 0) > 0;
   const [summarizing, setSummarizing] = useState(false);
   const [noteBackup, setNoteBackup] = useState<string | null>(null);
   // Bản gốc đã lưu trong DB (cột note_original, có sau khi chạy SQL 0025)
@@ -243,7 +244,9 @@ export function ProductForm({
         await postJson("/api/admin/bulk/notes", { items: [{ id: productId, note: form.note ?? "", original: noteBackup }] }).catch(() => null);
       }
 
-      if (form.type === "hotel") {
+      // Khách sạn đã có hạng phòng: bảng giá 5 mức quản lý ở trang "Bảng giá hàng loạt"
+      // → KHÔNG ghi đè từ form này (tránh mất giá theo mùa).
+      if (form.type === "hotel" && !manageRatesInBulk) {
         const validRates = rateItems.filter((r) => r.room_type.trim() && r.price > 0);
         await postJson(`/api/admin/products/${productId}/rates`, { rates: validRates });
       }
@@ -672,7 +675,17 @@ export function ProductForm({
               </span>
             )}
           </div>
-          <HotelRateEditor value={rateItems} onChange={setRateItems} />
+          {manageRatesInBulk ? (
+            <div className="rounded-xl bg-teal-light p-3 text-[13px] text-teal-dark">
+              Khách sạn này dùng <b>bảng giá theo mùa (5 mức)</b>. Sửa giá, hạng phòng, phụ thu tại{" "}
+              <a href="/admin/bulk/resort/edit" className="font-bold underline">
+                Resort / Khách sạn — Bảng giá hàng loạt
+              </a>
+              .
+            </div>
+          ) : (
+            <HotelRateEditor value={rateItems} onChange={setRateItems} />
+          )}
         </Card>
       )}
 

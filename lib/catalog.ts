@@ -1,6 +1,6 @@
 import "server-only";
 import { createPublicClient } from "@/lib/supabase/public-client";
-import type { Product } from "@/lib/types";
+import type { HotelRate, Product } from "@/lib/types";
 
 // ---------------------------------------------------------------------------
 // KHO SẢN PHẨM — cache trong bộ nhớ server, KHÔNG giới hạn số lượng.
@@ -72,3 +72,45 @@ export async function getAllProducts(): Promise<Product[]> {
   return (await loading).products;
 }
 
+
+// ---------------------------------------------------------------------------
+// BẢNG GIÁ HẠNG PHÒNG (resort / khách sạn) — cache RAM giống kho sản phẩm.
+// ---------------------------------------------------------------------------
+let rateCatalog: { signature: string; rates: HotelRate[] } | null = null;
+let rateLoading: Promise<{ signature: string; rates: HotelRate[] }> | null = null;
+let rateCheckAt = 0;
+
+export async function getAllRates(): Promise<HotelRate[]> {
+  const now = Date.now();
+  if (rateCatalog && now - rateCheckAt < CHECK_EVERY_MS) return rateCatalog.rates;
+  const supabase = createPublicClient();
+  const { data, count, error } = await supabase
+    .from("hotel_rates")
+    .select("updated_at", { count: "exact" })
+    .order("updated_at", { ascending: false })
+    .limit(1);
+  if (error) throw error;
+  rateCheckAt = Date.now();
+  const signature = `${count ?? 0}|${(data?.[0] as { updated_at?: string } | undefined)?.updated_at ?? ""}`;
+  if (rateCatalog && rateCatalog.signature === signature) return rateCatalog.rates;
+  if (!rateLoading) {
+    const total = count ?? 0;
+    rateLoading = (async () => {
+      const pages = Math.max(1, Math.ceil(total / PAGE));
+      const res = await Promise.all(
+        Array.from({ length: pages }, (_, i) =>
+          supabase.from("hotel_rates").select("*").order("id").range(i * PAGE, i * PAGE + PAGE - 1)
+        )
+      );
+      const rates: HotelRate[] = [];
+      for (const r of res) {
+        if (r.error) throw r.error;
+        rates.push(...((r.data ?? []) as HotelRate[]));
+      }
+      return { signature, rates };
+    })()
+      .then((c) => (rateCatalog = c))
+      .finally(() => (rateLoading = null));
+  }
+  return (await rateLoading).rates;
+}
