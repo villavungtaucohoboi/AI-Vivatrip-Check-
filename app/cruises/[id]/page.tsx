@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createPublicClient } from "@/lib/supabase/public-client";
 import { fetchCruiseById } from "@/lib/cruise-data";
 import { CruiseSaleView } from "@/components/cruises/cruise-sale-view";
 
@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export default async function CruiseDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
-  const supabase = await createClient();
+  const supabase = createPublicClient();
   const cruise = await fetchCruiseById(supabase, id);
   if (!cruise || !cruise.is_active) notFound();
 

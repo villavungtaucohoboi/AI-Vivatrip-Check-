@@ -427,7 +427,7 @@ export function ResortBulkAdd() {
                                 <td className="p-1"><div data-rpaste="price" data-row={i} data-room={mi}><RoomNum value={m.price} onChange={(v) => patchRoom(r.key, m.key, { price: v })} /></div></td>
                                 <td className="p-1"><div data-rpaste="capacity" data-row={i} data-room={mi}><RoomNum value={m.capacity} onChange={(v) => patchRoom(r.key, m.key, { capacity: v })} /></div></td>
                                 <td className="p-1"><div data-rpaste="extra" data-row={i} data-room={mi}><RoomNum value={m.extra} onChange={(v) => patchRoom(r.key, m.key, { extra: v })} /></div></td>
-                                <td className="p-1 text-center"><input type="checkbox" checked={m.breakfast} onChange={(e) => patchRoom(r.key, m.key, { breakfast: e.target.checked })} className="h-4 w-4 accent-[#0E6B5A]" /></td>
+                                <td className="p-1 text-center"><input type="checkbox" checked={m.breakfast} onChange={(e) => patchRoom(r.key, m.key, { breakfast: e.target.checked })} className="h-4 w-4 accent-[#EF4F58]" /></td>
                                 <td className="p-1"><div data-rpaste="note" data-row={i} data-room={mi}><RoomText value={m.note} onChange={(v) => patchRoom(r.key, m.key, { note: v })} /></div></td>
                                 <td className="p-1 text-center">
                                   <button type="button" onClick={() => patch(r.key, { rooms: r.rooms.filter((x) => x.key !== m.key) })} className="font-bold text-danger" title="Xoá hạng phòng">✕</button>

@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowDownUp, Check, ChevronDown, Clock, Download, Eye, ImageIcon, Link2, Loader2, Search, Share2, Star, Users, X } from "lucide-react";
+import { ArrowDownUp, CalendarDays, Check, ChevronDown, Clock, Copy, Download, Eye, FolderOpen, ImageIcon, Link2, Loader2, Search, Share2, Star, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/empty-state";
 import { formatVND } from "@/lib/format";
 import { canShareImages, copyImagesCollage, shareImages } from "@/lib/cruise-images";
+import { copyCruiseCardImage, shareOrDownloadCruiseCard } from "@/lib/cruise-card-image";
 import {
   CRUISE_CATEGORY_LABEL,
   CRUISE_STARS,
@@ -15,6 +16,7 @@ import {
   variantLabel,
   cruiseQuoteText,
   cruiseShareUrl,
+  cruiseSourceUrl,
   includedServices,
   itineraryItems,
   mealSummary,
@@ -196,6 +198,34 @@ export function CruiseSaleView({ cruises, single = false }: { cruises: Cruise[];
     setCopiedId(c.id);
     toast.success(`Đã copy link lịch trình ${c.name} — dán vào Zalo gửi khách.`);
     setTimeout(() => setCopiedId(null), 1800);
+  }
+
+  /** Gửi lịch trình dạng ẢNH: điện thoại → mở bảng chia sẻ (chọn Zalo); máy tính → copy ảnh, Ctrl+V vào Zalo. */
+  async function handleItineraryImage(c: Cruise) {
+    setImgBusy(`i${c.id}`);
+    try {
+      if (canShare) {
+        const r = await shareOrDownloadCruiseCard(c, `Lich-trinh-${slugify(c.name)}`);
+        if (r === "downloaded") toast.success("Đã tải ảnh lịch trình về máy — gửi qua Zalo cho khách.");
+      } else {
+        try {
+          await copyCruiseCardImage(c);
+          toast.success("Đã copy ẢNH lịch trình — mở Zalo bấm Ctrl+V để dán.");
+        } catch {
+          await shareOrDownloadCruiseCard(c, `Lich-trinh-${slugify(c.name)}`);
+          toast.success("Đã tải ảnh lịch trình về máy — kéo thả vào Zalo.");
+        }
+      }
+    } catch (e) {
+      if (!(e instanceof Error && e.name === "AbortError")) toast.error("Không tạo được ảnh lịch trình. Thử lại nhé.");
+    } finally {
+      setImgBusy(null);
+    }
+  }
+
+  async function handleCopyText(c: Cruise) {
+    await copyText(cruiseQuoteText(c));
+    toast.success("Đã copy nội dung chữ — dán vào Zalo.");
   }
 
   async function handleCopyImages(id: string, urls: string[]) {
@@ -437,7 +467,7 @@ export function CruiseSaleView({ cruises, single = false }: { cruises: Cruise[];
                           </span>
                         </button>
                       )}
-                      {c.discount_percent > 0 && (
+                      {!single && c.discount_percent > 0 && (
                         <span className="absolute right-1 top-1 rounded-md bg-coral px-1.5 py-0.5 text-[10.5px] font-extrabold text-white shadow">-{c.discount_percent}%</span>
                       )}
                     </div>
@@ -446,7 +476,7 @@ export function CruiseSaleView({ cruises, single = false }: { cruises: Cruise[];
                       <div className="flex items-start justify-between gap-1.5">
                         <p className="line-clamp-2 text-[15px] font-extrabold leading-snug text-ink">{c.name}</p>
                         {!single && (
-                          <input type="checkbox" checked={selected.has(c.id)} onChange={() => toggle(c.id)} aria-label="Chọn để tải gộp" className="mt-0.5 h-[18px] w-[18px] shrink-0 accent-[#0E6B5A]" />
+                          <input type="checkbox" checked={selected.has(c.id)} onChange={() => toggle(c.id)} aria-label="Chọn để tải gộp" className="mt-0.5 h-[18px] w-[18px] shrink-0 accent-[#EF4F58]" />
                         )}
                       </div>
                       {g.rows.length > 1 && (
@@ -478,17 +508,17 @@ export function CruiseSaleView({ cruises, single = false }: { cruises: Cruise[];
                           )}
                         </div>
                       )}
-                      <div className="mt-1.5 flex flex-wrap items-baseline gap-x-1.5">
+                      {!single && (<div className="mt-1.5 flex flex-wrap items-baseline gap-x-1.5">
                         <span className="text-[19px] font-extrabold leading-none tracking-tight text-hot tabular-price">{formatVND(adult)}</span>
                         <span className="text-[10.5px] font-medium text-ink-muted">/ người lớn</span>
                         {c.discount_percent > 0 && (
                           <span className="text-[11px] text-ink-muted/80 line-through tabular-price">{formatVND(c.price_adult)}</span>
                         )}
-                      </div>
+                      </div>)}
                     </div>
                   </div>
 
-                  {fields.child && c.child_prices.length > 0 && (
+                  {!single && fields.child && c.child_prices.length > 0 && (
                     <div className="mx-3 mb-2 flex flex-wrap gap-1">
                       {c.child_prices.map((t, ti) => (
                         <span key={ti} className="rounded-lg bg-sky-50 px-2 py-1 text-[11.5px] text-sky-800 ring-1 ring-sky-100">
@@ -502,7 +532,12 @@ export function CruiseSaleView({ cruises, single = false }: { cruises: Cruise[];
                     <div className="mx-3 mb-2 flex flex-wrap gap-1">
                       {c.cabins.map((x) => (
                         <span key={x.id} className="rounded-lg bg-teal-light px-2 py-1 text-[11.5px] text-teal-dark">
-                          {x.name}: <b>{shortVND(priceAfterPercent(x.price, c.discount_percent))}</b>
+                          {x.name}
+                          {!single && (
+                            <>
+                              : <b>{shortVND(priceAfterPercent(x.price, c.discount_percent))}</b>
+                            </>
+                          )}
                         </span>
                       ))}
                     </div>
@@ -515,8 +550,18 @@ export function CruiseSaleView({ cruises, single = false }: { cruises: Cruise[];
                   )}
 
                   {single ? null : (
-                    <div className="flex gap-1.5 px-3 pb-3">
-                      <button type="button" onClick={() => handleCopy(c)} className="flex h-9 flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-xl bg-gradient-to-r from-teal-dark to-teal text-[12px] font-bold text-white shadow-sm">
+                    <div className="px-3 pb-3">
+                    <button
+                      type="button"
+                      disabled={imgBusy !== null}
+                      onClick={() => handleItineraryImage(c)}
+                      className="mb-1.5 flex h-10 w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-gradient-to-r from-hot to-coral text-[13px] font-extrabold text-white shadow-sm disabled:opacity-70"
+                    >
+                      {imgBusy === `i${c.id}` ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarDays className="h-4 w-4" />}
+                      {imgBusy === `i${c.id}` ? "Đang tạo ảnh…" : canShare ? "Gửi lịch trình dạng ảnh (Zalo)" : "Copy ảnh lịch trình"}
+                    </button>
+                    <div className="flex gap-1.5">
+                      <button type="button" onClick={() => handleCopy(c)} className="flex h-9 flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-xl bg-teal text-[12px] font-bold text-white">
                         {copiedId === c.id ? <Check className="h-3.5 w-3.5" /> : <Link2 className="h-3.5 w-3.5" />}
                         Link
                       </button>
@@ -536,6 +581,7 @@ export function CruiseSaleView({ cruises, single = false }: { cruises: Cruise[];
                         {open[g.key] ? "Thu gọn" : "Chi tiết"}
                         <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open[g.key] ? "rotate-180" : ""}`} />
                       </button>
+                    </div>
                     </div>
                   )}
 
@@ -585,6 +631,18 @@ export function CruiseSaleView({ cruises, single = false }: { cruises: Cruise[];
                         </Section>
                       )}
                       {c.note && !/^https?:\/\//i.test(c.note.trim()) && <p className="mt-2 text-[11.5px] text-ink-muted">Ghi chú: {c.note}</p>}
+                      {!single && (
+                        <div className="mt-2.5 flex gap-1.5">
+                          <button type="button" onClick={() => handleCopyText(c)} className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl border border-border bg-white text-[12px] font-bold text-teal-dark">
+                            <Copy className="h-3.5 w-3.5" /> Copy nội dung chữ
+                          </button>
+                          {cruiseSourceUrl(c) && (
+                            <a href={cruiseSourceUrl(c)!} target="_blank" rel="noopener noreferrer" className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl border border-border bg-white text-[12px] font-bold text-ink-muted">
+                              <FolderOpen className="h-3.5 w-3.5" /> Thư mục Drive gốc
+                            </a>
+                          )}
+                        </div>
+                      )}
                       {!single && (
                         <button
                           type="button"

@@ -202,7 +202,7 @@ export function CheckCell({
         title={title}
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        className="h-4 w-4 cursor-pointer accent-[#0E6B5A]"
+        className="h-4 w-4 cursor-pointer accent-[#EF4F58]"
       />
     </div>
   );

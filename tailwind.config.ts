@@ -9,30 +9,32 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        paper: "#F7F6F2",
-        "paper-dim": "#EFEDE6",
+        // Màu thương hiệu VivaTrip (theo logo): đỏ san hô + cam đào
+        paper: "#FBF8F5",
+        "paper-dim": "#F3EEE8",
         ink: "#1B211F",
         "ink-muted": "#4F5953",
+        // Giữ tên "teal" để không phải sửa hàng trăm chỗ — giá trị là màu chính của logo
         teal: {
-          DEFAULT: "#0E6B5A",
-          dark: "#0A5347",
-          light: "#E4F0EC",
+          DEFAULT: "#EF4F58",
+          dark: "#C7353F",
+          light: "#FFEDEE",
         },
         sand: {
-          DEFAULT: "#C9A15A",
-          light: "#F3E9D3",
-          dark: "#7A5F2B",
+          DEFAULT: "#EDA36B",
+          light: "#FDF1E6",
+          dark: "#9C5820",
         },
-        border: "#E2DFD5",
+        border: "#EAE3DB",
         // Đỏ nổi bật — tô dòng giá đúng ngày khách hỏi
         hot: {
-          DEFAULT: "#D92D20",
-          light: "#FEECEA",
+          DEFAULT: "#D42A2A",
+          light: "#FFE9E7",
         },
         // Cam san hô — nhãn chiết khấu
         coral: {
-          DEFAULT: "#F0592A",
-          light: "#FFEDE5",
+          DEFAULT: "#EE8A3C",
+          light: "#FFF1E4",
         },
         danger: {
           DEFAULT: "#B3402A",
@@ -41,7 +43,8 @@ const config: Config = {
       },
       fontFamily: {
         sans: ["var(--font-body)", "system-ui", "sans-serif"],
-        display: ["var(--font-body)", "system-ui", "sans-serif"],
+        // Quicksand: chữ tròn, giống nét logo VivaTrip — dùng cho tiêu đề
+        display: ["var(--font-display)", "var(--font-body)", "system-ui", "sans-serif"],
       },
       borderRadius: {
         lg: "0.625rem",

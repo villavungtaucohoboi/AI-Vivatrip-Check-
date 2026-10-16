@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState, type ClipboardEvent } from "react";
 import { toast } from "sonner";
+import { parseItinerary } from "@/lib/itinerary-parser";
 import {
   BulkSaveBar,
   CheckCell,
@@ -133,6 +134,8 @@ function isEmptyRow(r: Row): boolean {
 }
 
 export function CruiseBulk({ mode, initial }: { mode: "edit" | "add"; initial: Cruise[] }) {
+  // Bản lịch trình trước khi bấm "Tự tách" — để hoàn tác từng tàu
+  const itineraryBackup = useRef(new Map<number, string>());
   const counter = useRef(1);
   const nextKey = () => counter.current++;
 
@@ -597,7 +600,36 @@ export function CruiseBulk({ mode, initial }: { mode: "edit" | "add"; initial: C
                         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                           <div>
                             <Field label="Lịch trình (mỗi dòng 1 mốc: giờ | nội dung)" full>
-                              <textarea value={r.itinerary} onChange={(e) => patch(r.key, { itinerary: e.target.value })} rows={7} placeholder={"07:30 | Xe đón tại Hà Nội\n12:00 | Lên tàu, ăn trưa buffet"} className="w-full rounded-lg border border-border bg-white px-3 py-2 text-[12.5px]" />
+                              <textarea value={r.itinerary} onChange={(e) => patch(r.key, { itinerary: e.target.value })} rows={7} placeholder={"Dán nguyên bài lịch trình chủ tàu gửi rồi bấm “Tự tách lịch trình”\nhoặc gõ: 07:30 | Xe đón tại Hà Nội"} className="w-full rounded-lg border border-border bg-white px-3 py-2 text-[12.5px]" />
+                              <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                                <button
+                                  type="button"
+                                  disabled={!r.itinerary.trim()}
+                                  onClick={() => {
+                                    const parsed = parseItinerary(r.itinerary);
+                                    if (!parsed.trim()) return void toast.error("Không tìm thấy mốc giờ nào trong nội dung.");
+                                    itineraryBackup.current.set(r.key, r.itinerary);
+                                    patch(r.key, { itinerary: parsed });
+                                    toast.success("Đã tách lịch trình (đã bỏ phần giá) — kiểm tra lại rồi Lưu.");
+                                  }}
+                                  className="rounded-lg bg-teal px-3 py-1.5 text-[12px] font-bold text-white disabled:opacity-40"
+                                >
+                                  ✨ Tự tách lịch trình
+                                </button>
+                                {itineraryBackup.current.has(r.key) && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      patch(r.key, { itinerary: itineraryBackup.current.get(r.key)! });
+                                      itineraryBackup.current.delete(r.key);
+                                    }}
+                                    className="rounded-lg border border-border bg-white px-3 py-1.5 text-[12px] font-bold text-ink-muted"
+                                  >
+                                    Hoàn tác
+                                  </button>
+                                )}
+                                <span className="text-[11px] text-ink-muted">Miễn phí, không dùng AI</span>
+                              </div>
                             </Field>
                             <div className="mt-3">
                               <Field label="Ghi chú" full>
@@ -611,7 +643,7 @@ export function CruiseBulk({ mode, initial }: { mode: "edit" | "add"; initial: C
                             <div className="space-y-1.5">
                               {r.meals.map((m, mi) => (
                                 <div key={mi} className="flex items-center gap-2">
-                                  <input type="checkbox" checked={m.included} onChange={(e) => update(r.key, (x) => ({ meals: x.meals.map((y, yi) => (yi === mi ? { ...y, included: e.target.checked } : y)) }))} className="h-4 w-4 accent-[#0E6B5A]" />
+                                  <input type="checkbox" checked={m.included} onChange={(e) => update(r.key, (x) => ({ meals: x.meals.map((y, yi) => (yi === mi ? { ...y, included: e.target.checked } : y)) }))} className="h-4 w-4 accent-[#EF4F58]" />
                                   <input value={m.label} onChange={(e) => update(r.key, (x) => ({ meals: x.meals.map((y, yi) => (yi === mi ? { ...y, label: e.target.value } : y)) }))} className="h-8 flex-1 rounded-md border border-border bg-white px-2 text-[12px]" />
                                   <button type="button" onClick={() => update(r.key, (x) => ({ meals: x.meals.filter((_, yi) => yi !== mi) }))} className="px-1 font-bold text-danger">✕</button>
                                 </div>
@@ -628,7 +660,7 @@ export function CruiseBulk({ mode, initial }: { mode: "edit" | "add"; initial: C
                             <div className="grid grid-cols-2 gap-x-3 gap-y-1">
                               {CRUISE_SERVICES.map((s) => (
                                 <label key={s.key} className="flex cursor-pointer items-center gap-2 text-[12px]">
-                                  <input type="checkbox" checked={r.services.includes(s.key)} onChange={(e) => toggleService(r.key, s.key, e.target.checked)} className="h-4 w-4 accent-[#0E6B5A]" />
+                                  <input type="checkbox" checked={r.services.includes(s.key)} onChange={(e) => toggleService(r.key, s.key, e.target.checked)} className="h-4 w-4 accent-[#EF4F58]" />
                                   {s.label}
                                 </label>
                               ))}

@@ -114,11 +114,16 @@ export interface Cruise {
   files: CruiseFile[];
 }
 
-/** Link gửi khách: link tuỳ chọn Admin nhập, nếu trống dùng trang riêng của VivaTrip. */
-export function cruiseShareUrl(c: Pick<Cruise, "id" | "itinerary_url">, origin: string): string {
-  const custom = c.itinerary_url?.trim();
-  if (custom) return /^https?:\/\//i.test(custom) ? custom : `https://${custom}`;
+/** Link gửi khách: trang riêng của VivaTrip (mở nhanh, đẹp trên điện thoại). */
+export function cruiseShareUrl(c: Pick<Cruise, "id">, origin: string): string {
   return `${origin}/cruises/${c.id}`;
+}
+
+/** Link gốc Admin nhập (VD thư mục Google Drive) — chỉ để Sale tham khảo. */
+export function cruiseSourceUrl(c: Pick<Cruise, "itinerary_url">): string | null {
+  const custom = c.itinerary_url?.trim();
+  if (!custom) return null;
+  return /^https?:\/\//i.test(custom) ? custom : `https://${custom}`;
 }
 
 /** Mẫu bữa ăn gợi ý khi tạo mới. */
@@ -182,28 +187,22 @@ export function priceAfterPercent(price: number, percent: number): number {
 
 const vnd = (n: number) => new Intl.NumberFormat("vi-VN").format(n);
 
-/** Nội dung gửi khách (copy dán Zalo / đưa vào file nén). */
+/** Nội dung gửi khách (copy dán Zalo / đưa vào file nén). KHÔNG kèm giá — Sale báo giá riêng. */
 export function cruiseQuoteText(c: Cruise): string {
   const lines: string[] = [];
-  lines.push(c.name);
-  lines.push(`${variantLabel(c.variant) ? `${variantLabel(c.variant)} · ` : ""}${c.duration_label ?? CRUISE_CATEGORY_LABEL[c.category]}${c.star ? ` · ${c.star} sao` : ""}`);
-  const adult = priceAfterPercent(c.price_adult, c.discount_percent);
-  lines.push(`Giá người lớn: ${vnd(adult)}đ${c.discount_percent ? ` (đã chiết khấu ${c.discount_percent}%)` : ""}`);
-  c.child_prices.forEach((x) => lines.push(`Trẻ em ${x.age_label}: ${vnd(priceAfterPercent(x.price, c.discount_percent))}đ`));
+  lines.push(`🛳️ ${c.name.toUpperCase()}`);
+  lines.push(`${variantLabel(c.variant) ? `${variantLabel(c.variant)} · ` : ""}${c.duration_label ?? CRUISE_CATEGORY_LABEL[c.category]}${c.star ? ` · ${c.star}⭐` : ""}`);
   if (c.capacity || c.cabin_count) lines.push([c.capacity ? `${c.capacity} chỗ` : "", c.cabin_count ? `${c.cabin_count} cabin` : ""].filter(Boolean).join(" · "));
-  if (c.cabins.length) {
-    lines.push("", "Hạng cabin:");
-    c.cabins.forEach((x) => lines.push(`- ${x.name}: ${vnd(priceAfterPercent(x.price, c.discount_percent))}đ/khách`));
-  }
-  lines.push("", `ĂN UỐNG: ${mealText(c.meals)}`);
+  if (c.cabins.length) lines.push(`🛏️ Hạng cabin: ${c.cabins.map((x) => x.name).join(", ")}`);
+  lines.push("", `🍽️ ĂN UỐNG: ${mealText(c.meals)}`);
   const sv = includedServices(c.services);
-  lines.push(`DỊCH VỤ BAO GỒM: ${sv.length ? sv.join(", ") : "—"}`);
+  lines.push(`✅ BAO GỒM: ${sv.length ? sv.join(", ") : "—"}`);
   const it = itineraryItems(c.itinerary);
   if (it.length) {
-    lines.push("", "LỊCH TRÌNH:");
-    it.forEach((x) => lines.push(x.time ? `${x.time} — ${x.text}` : x.text));
+    lines.push("", "🗓️ LỊCH TRÌNH:");
+    it.forEach((x) => lines.push(x.time ? `▸ ${x.time} — ${x.text}` : x.text));
   }
-  if (c.note) lines.push("", `Ghi chú: ${c.note}`);
-  lines.push("", "VivaTrip - Hotline 0942.988.699");
+  if (c.note && !/^https?:\/\//i.test(c.note.trim())) lines.push("", `📌 Lưu ý: ${c.note}`);
+  lines.push("", "☎️ VivaTrip · Hotline 0942.988.699");
   return lines.join("\n");
 }

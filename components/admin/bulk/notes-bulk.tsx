@@ -168,7 +168,7 @@ export function NotesBulk({ initial }: { initial: NoteRow[] }) {
             </button>
           ))}
           <label className="flex items-center gap-1.5 text-[12.5px] font-medium text-ink">
-            <input type="checkbox" checked={onlyUnsummarized} onChange={(e) => setOnlyUnsummarized(e.target.checked)} className="h-4 w-4 accent-[#0E6B5A]" />
+            <input type="checkbox" checked={onlyUnsummarized} onChange={(e) => setOnlyUnsummarized(e.target.checked)} className="h-4 w-4 accent-[#EF4F58]" />
             Chỉ căn chưa rút gọn
           </label>
         </div>
@@ -185,7 +185,7 @@ export function NotesBulk({ initial }: { initial: NoteRow[] }) {
                   return next;
                 })
               }
-              className="h-4 w-4 accent-[#0E6B5A]"
+              className="h-4 w-4 accent-[#EF4F58]"
             />
             Chọn tất cả ({visible.length})
           </label>
@@ -230,7 +230,7 @@ export function NotesBulk({ initial }: { initial: NoteRow[] }) {
                       return next;
                     })
                   }
-                  className="h-4 w-4 accent-[#0E6B5A]"
+                  className="h-4 w-4 accent-[#EF4F58]"
                 />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[14px] font-bold text-ink">{r.name}</p>

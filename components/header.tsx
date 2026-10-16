@@ -63,12 +63,8 @@ export function Header({ role: initialRole }: { role: UserRole }) {
     <header className="sticky top-0 z-30 border-b border-border bg-paper/90 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
         <Link href="/search" className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-teal text-white font-bold text-base">
-            V
-          </div>
-          <span className="hidden text-[17px] font-bold text-ink sm:block">
-            VivaTrip
-          </span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/brand/vivatrip-logo.png" alt="VivaTrip" className="h-8 w-auto sm:h-9" />
         </Link>
 
         <nav className="hidden items-center gap-1.5 sm:flex">

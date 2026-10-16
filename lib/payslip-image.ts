@@ -34,7 +34,7 @@ export function downloadPayslipImage(data: PayslipImageData) {
   ctx.fillStyle = "#F7F6F2";
   ctx.fillRect(0, 0, W, H);
 
-  ctx.fillStyle = "#0E6B5A";
+  ctx.fillStyle = "#EF4F58";
   roundRect(ctx, 40, 36, 44, 44, 12);
   ctx.fill();
   ctx.fillStyle = "#ffffff";
@@ -66,7 +66,7 @@ export function downloadPayslipImage(data: PayslipImageData) {
   const netH = 130;
   const grad = ctx.createLinearGradient(0, netY, W, netY + netH);
   grad.addColorStop(0, "#0A5347");
-  grad.addColorStop(1, "#0E6B5A");
+  grad.addColorStop(1, "#EF4F58");
   ctx.fillStyle = grad;
   roundRect(ctx, 40, netY, W - 80, netH, 18);
   ctx.fill();

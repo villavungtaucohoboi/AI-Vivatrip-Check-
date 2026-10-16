@@ -108,7 +108,7 @@ function PriceBlock({
                 <span
                   className={cn(
                     "text-[12.5px] lg:text-[15px] font-bold tracking-tight",
-                    isHot ? "text-hot" : "text-teal-dark"
+                    isHot ? "text-hot" : "text-ink"
                   )}
                 >
                   {shortMoney(final)}

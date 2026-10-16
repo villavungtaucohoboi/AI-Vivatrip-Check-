@@ -29,7 +29,7 @@ export function VillaPricingTable({ product, context }: { product: Product; cont
             </div>
             <div className="text-right tabular-price">
               {hasDiscount && <p className="text-[12px] text-ink-muted line-through">{formatVND(base)}</p>}
-              <p className={cn("text-[18px] font-extrabold leading-tight tracking-tight", hot ? "text-hot" : "text-teal-dark")}>
+              <p className={cn("text-[18px] font-extrabold leading-tight tracking-tight", hot ? "text-hot" : "text-ink")}>
                 {formatVND(final)}
               </p>
             </div>
