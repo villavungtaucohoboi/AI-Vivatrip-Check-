@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Building2, CalendarClock, ChevronDown, Dices, Lock, PartyPopper, Plus, Search, Settings, Ship, Wallet } from "lucide-react";
+import { Building2, CalendarClock, ChevronDown, Dices, Lock, PartyPopper, Plus, Search, Settings, Ship } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useClientRole } from "@/lib/use-client-role";
 import type { UserRole } from "@/lib/types";
@@ -33,13 +33,12 @@ export function Header({ role: initialRole }: { role: UserRole }) {
   }
 
   // Trang gác cổng Admin không nên hiện sẵn menu điều hướng trước khi đăng nhập
-  if (pathname === "/admin/login" || pathname.startsWith("/payroll")) return null;
+  if (pathname === "/admin/login") return null;
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
   const moreItems: { href: string; label: string; icon: typeof Search }[] = [
     { href: "/holiday-funds", label: "Quỹ ngày lễ", icon: PartyPopper },
     { href: "/daily-wishes", label: "Lời chúc", icon: Dices },
-    { href: "/payroll", label: "Bảng lương", icon: Wallet },
     ...(role === "admin" ? [{ href: "/admin/products", label: "Quản lý sản phẩm", icon: Settings }] : []),
   ];
   const moreActive = moreItems.some((m) => isActive(m.href));

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, CalendarClock, Dices, MoreHorizontal, PartyPopper, Plus, Search, Settings, Ship, Wallet } from "lucide-react";
+import { Building2, CalendarClock, Dices, MoreHorizontal, PartyPopper, Plus, Search, Settings, Ship } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useClientRole } from "@/lib/use-client-role";
 import type { UserRole } from "@/lib/types";
@@ -16,7 +16,7 @@ export function BottomNav({ role: initialRole }: { role: UserRole }) {
 
   useEffect(() => setMoreOpen(false), [pathname]);
 
-  if (pathname === "/admin/login" || pathname.startsWith("/payroll")) return null;
+  if (pathname === "/admin/login") return null;
 
   // 4 mục dùng nhiều nhất nằm sẵn trên thanh; phần còn lại gom vào "Thêm".
   const main = [
@@ -28,7 +28,6 @@ export function BottomNav({ role: initialRole }: { role: UserRole }) {
   const more = [
     { href: "/holiday-funds", label: "Quỹ ngày lễ", icon: PartyPopper },
     { href: "/daily-wishes", label: "Lời chúc", icon: Dices },
-    { href: "/payroll", label: "Bảng lương", icon: Wallet },
     ...(role === "admin" ? [{ href: "/admin/products", label: "Quản lý", icon: Settings }] : []),
   ];
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
