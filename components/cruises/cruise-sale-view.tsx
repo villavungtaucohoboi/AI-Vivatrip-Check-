@@ -287,7 +287,7 @@ export function CruiseSaleView({ cruises, single = false }: { cruises: Cruise[];
     setImgBusy(`c${id}`);
     try {
       await copyImagesCollage(urls);
-      toast.success(`Đã copy ${Math.min(urls.length, 9)} ảnh (ghép thành 1 ảnh) — mở Zalo bấm Ctrl+V để dán.`);
+      toast.success(`Đã copy ${urls.length} ảnh (ghép thành 1 ảnh) — mở Zalo bấm Ctrl+V để dán.`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Không copy được ảnh.");
     } finally {

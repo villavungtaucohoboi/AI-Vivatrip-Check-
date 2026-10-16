@@ -1,5 +1,10 @@
+"use client";
+
 import Link from "next/link";
-import { BedDouble, Check, MapPin, Star, Users } from "lucide-react";
+import { toast } from "sonner";
+import { BedDouble, Check, FileText, MapPin, Receipt, Star, Users } from "lucide-react";
+import { PhotoShareButtons } from "@/components/resort/photo-share-buttons";
+import { resortPriceQuoteText, resortQuoteText } from "@/lib/resort-text";
 import { ProductImage } from "@/components/product-image";
 import { minRatePrice } from "@/lib/resort-pricing";
 import { PRODUCT_TYPE_LABEL, type Product } from "@/lib/types";
@@ -39,9 +44,23 @@ export function ResortGridCard({
   const amen = AMENITY.filter((a) => p[a.key]).slice(0, 2);
   const href = `/products/${p.id}${checkin ? `?date=${checkin}${checkout ? `&checkout=${checkout}` : ""}` : ""}`;
 
+  const copy = async (text: string, msg: string) => {
+    await navigator.clipboard.writeText(text).catch(() => null);
+    toast.success(msg);
+  };
+  const copyPrice = () => {
+    if (!checkin) return;
+    const rows = result.rates
+      .filter((r) => r.quote?.avg != null)
+      .map((r) => ({ room: r, avg: r.quote!.avg, total: r.quote!.total, label: r.quote!.label ?? null }));
+    copy(resortPriceQuoteText(p, rows, checkin, checkout, nights), "Đã copy báo giá theo ngày — dán vào Zalo.");
+  };
+  const mini = "flex h-8 flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-xl border border-border bg-white px-1.5 text-[11.5px] font-bold text-ink";
+
   return (
-    <Link href={href} className="group block h-full">
-      <div className="flex h-full flex-col overflow-hidden rounded-card border border-border bg-white shadow-card transition-shadow hover:shadow-float">
+    <div className="flex h-full flex-col overflow-hidden rounded-card border border-border bg-white shadow-card transition-shadow hover:shadow-float">
+    <Link href={href} className="group flex flex-1 flex-col">
+      <div className="flex flex-1 flex-col">
         <div className="relative aspect-[16/11] w-full overflow-hidden bg-paper-dim">
           <ProductImage
             src={result.images[0] ?? p.thumbnail_url}
@@ -145,5 +164,18 @@ export function ResortGridCard({
         </div>
       </div>
     </Link>
+      {/* Gửi khách ngay từ kết quả tìm kiếm — không cần mở resort */}
+      <div className="flex flex-wrap gap-1 border-t border-border/70 p-1.5 lg:gap-1.5 lg:p-2">
+        <PhotoShareButtons images={result.images} name={p.product_name} description={() => resortQuoteText(p, result.rates)} compact className="flex-1" />
+        <button type="button" onClick={() => copy(resortQuoteText(p, result.rates), "Đã copy mô tả (không giá) — dán vào Zalo.")} className={mini}>
+          <FileText className="h-3.5 w-3.5" /> Mô tả
+        </button>
+        {checkin && best?.quote && (
+          <button type="button" onClick={copyPrice} className={cn(mini, "basis-full border-hot/30 bg-red-50 text-hot")}>
+            <Receipt className="h-3.5 w-3.5" /> Copy báo giá {nights} đêm
+          </button>
+        )}
+      </div>
+    </div>
   );
 }

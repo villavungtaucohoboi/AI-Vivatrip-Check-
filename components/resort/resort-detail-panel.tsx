@@ -106,7 +106,7 @@ export function ResortDetailPanel({
 
       <div className="space-y-2 rounded-card border border-border bg-white p-3 shadow-card">
         <p className="text-[12px] font-bold uppercase tracking-wide text-ink-muted">Gửi khách (không kèm giá)</p>
-        <PhotoShareButtons images={images} name={product.product_name} />
+        <PhotoShareButtons images={images} name={product.product_name} description={() => resortQuoteText(product, rates)} />
         <button
           type="button"
           onClick={async () => {

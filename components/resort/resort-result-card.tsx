@@ -133,7 +133,7 @@ export function ResortResultCard({
           </Collapsible>
         )}
 
-        <PhotoShareButtons images={images} name={product.product_name} />
+        <PhotoShareButtons images={images} name={product.product_name} description={() => resortQuoteText(product, rates)} />
         <div className="flex gap-2">
           <button
             type="button"
