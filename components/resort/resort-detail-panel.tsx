@@ -1,14 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { Copy, FileText, Wallet } from "lucide-react";
+import { Copy, ExternalLink, FileText, Gift, Receipt, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { NoteView } from "@/components/note-view";
 import { ResortRatesTable } from "@/components/resort/resort-rates-table";
 import { PhotoShareButtons } from "@/components/resort/photo-share-buttons";
 import { Collapsible } from "@/components/resort/resort-result-card";
-import { resortQuoteText } from "@/lib/resort-text";
+import { resortPriceQuoteText, resortQuoteText } from "@/lib/resort-text";
+import { quoteStay } from "@/lib/resort-pricing";
 import type { Holiday, HotelRate, Product } from "@/lib/types";
 
 /** Phần giá + gửi khách trên trang chi tiết resort / khách sạn. */
@@ -58,6 +59,29 @@ export function ResortDetailPanel({
         )}
       </div>
 
+      {checkin && rates.length > 0 && (
+        <button
+          type="button"
+          onClick={async () => {
+            const rows = rates.map((room) => {
+              const q = quoteStay(room, product, holidays, checkin, checkout || undefined);
+              return { room, avg: q.avg, total: q.total, label: q.label };
+            });
+            const nights = quoteStay(rates[0], product, holidays, checkin, checkout || undefined).nights.length;
+            await navigator.clipboard.writeText(resortPriceQuoteText(product, rows, checkin, checkout || undefined, nights)).catch(() => null);
+            toast.success("Đã copy BÁO GIÁ theo ngày — dán vào Zalo gửi khách.");
+          }}
+          className="flex h-11 w-full items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-teal to-sand text-[13px] font-bold text-white shadow-sm"
+        >
+          <Receipt className="h-4 w-4" /> Copy báo giá theo ngày đã chọn
+        </button>
+      )}
+
+      {product.perks && (
+        <Collapsible icon={<Gift className="h-4 w-4 text-teal" />} title="Quyền lợi / tiện ích bao gồm" tone="fee">
+          <NoteView text={product.perks} />
+        </Collapsible>
+      )}
       {product.surcharge_note && (
         <Collapsible icon={<Wallet className="h-4 w-4 text-sand-dark" />} title="Phụ thu" tone="fee">
           <NoteView text={product.surcharge_note} />
@@ -67,6 +91,17 @@ export function ResortDetailPanel({
         <Collapsible icon={<FileText className="h-4 w-4 text-amber-700" />} title="Tóm tắt hợp đồng" tone="sale" badge="CHỈ SALE XEM">
           <NoteView text={product.contract_summary} />
         </Collapsible>
+      )}
+
+      {product.image_link && (
+        <a
+          href={product.image_link}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1.5 rounded-xl border border-border bg-white px-3 py-2.5 text-[12.5px] font-semibold text-ink-muted"
+        >
+          <ExternalLink className="h-4 w-4" /> Album ảnh gốc của resort
+        </a>
       )}
 
       <div className="space-y-2 rounded-card border border-border bg-white p-3 shadow-card">

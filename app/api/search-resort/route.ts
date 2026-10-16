@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
   // Câu chữ đoán ra "villa" trên trang resort → bỏ
   if (f.type === "villa") delete f.type;
 
-  const types: ProductType[] = f.type ? [f.type] : ["resort", "hotel"];
+  const types: ProductType[] = f.type ? [f.type] : ["resort", "hotel", "homestay"];
   const ratesBy = new Map<string, HotelRate[]>();
   for (const r of rates) ratesBy.set(r.product_id, [...(ratesBy.get(r.product_id) ?? []), r]);
 
@@ -103,6 +103,7 @@ export async function POST(req: NextRequest) {
   const scored: (ResortResult & { score: number; diff: number })[] = [];
   for (const p of products) {
     if (!types.includes(p.type)) continue;
+    if (f.star && (p.star ?? 0) < f.star) continue;
     if (areaN && !normalize(`${p.area} ${p.sub_region ?? ""} ${p.address ?? ""}`).includes(areaN)) continue;
 
     const own = [...(ratesBy.get(p.id) ?? [])].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.price - b.price);
@@ -111,7 +112,7 @@ export async function POST(req: NextRequest) {
 
     const withQuote: ResortRateResult[] = list.map((r) => {
       const quote = f.date ? quoteStay(r, p, holidays, f.date, f.checkout) : null;
-      const nightly = quote ? quote.avg : minRatePrice(r);
+      const nightly = quote ? quote.avg : minRatePrice(r, p);
       const fitsGuests = !f.guests || r.capacity == null || r.capacity >= f.guests;
       return { ...r, quote, nightly, fitsGuests };
     });

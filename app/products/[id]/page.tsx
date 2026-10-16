@@ -102,7 +102,7 @@ export default async function ProductDetailPage({
           className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-ink-muted hover:text-ink"
         >
           <ArrowLeft className="h-4 w-4" />
-          Quay lại Tìm Resort/Hotel
+          Quay lại Tìm Resort / Khách sạn
         </Link>
 
         <ProductGallery images={gallery} alt={product.product_name} />
@@ -111,7 +111,10 @@ export default async function ProductDetailPage({
           <Badge variant="neutral" className="mb-2">
             {PRODUCT_TYPE_LABEL[product.type]}
           </Badge>
-          <h1 className="font-display text-2xl font-bold text-ink">{product.product_name}</h1>
+          <h1 className="font-display text-2xl font-bold text-ink">
+            {product.product_name}
+            {product.star ? <span className="ml-2 align-middle text-[18px] text-amber-500">{"★".repeat(product.star)}</span> : null}
+          </h1>
           <p className="mt-1 flex items-center gap-1.5 text-sm font-medium text-teal">
             <MapPin className="h-4 w-4" />
             {product.address || product.area}

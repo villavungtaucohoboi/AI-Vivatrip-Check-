@@ -5,13 +5,14 @@ import type { HotelRate } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-export default async function ResortBulkEditPage() {
+export default async function ResortBulkEditPage({ searchParams }: { searchParams: Promise<{ new?: string }> }) {
+  const sp = await searchParams;
   const supabase = await createClient();
   // select("*") để vẫn chạy khi chưa chạy SQL 0026 (các cột mới sẽ là undefined)
   const { data: resorts } = await supabase
     .from("products")
     .select("*")
-    .in("type", ["resort", "hotel"])
+    .in("type", ["resort", "hotel", "homestay"])
     .order("area")
     .order("product_name");
 
@@ -21,10 +22,10 @@ export default async function ResortBulkEditPage() {
   return (
     <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
       <BulkPageHeader
-        title="Resort / Khách sạn — Bảng giá hàng loạt"
-        subtitle="Mỗi resort là 1 khung: hạng phòng × 5 mức giá (thấp/cao điểm × ngày thường/cuối tuần + lễ Tết). Bấm “AI điền từ hợp đồng / ảnh” để AI tự nhập, xem lại rồi Lưu tất cả."
+        title="Resort · Khách sạn · Homestay — Bảng giá"
+        subtitle="Mỗi nơi tự khai các GIAI ĐOẠN giá (thường, cao điểm, đỉnh điểm, lễ Tết…) với khoảng ngày riêng. Dán hợp đồng / ảnh bảng giá để AI điền sẵn, xem lại rồi Lưu."
       />
-      <ResortPricingSheet resorts={(resorts ?? []) as ResortRow[]} rates={(rates ?? []) as HotelRate[]} />
+      <ResortPricingSheet resorts={(resorts ?? []) as ResortRow[]} rates={(rates ?? []) as HotelRate[]} openNew={sp.new === "1"} />
     </main>
   );
 }

@@ -1,11 +1,12 @@
 export type UserRole = "admin" | "sale";
 
-export type ProductType = "villa" | "hotel" | "resort";
+export type ProductType = "villa" | "hotel" | "resort" | "homestay";
 
 export const PRODUCT_TYPE_LABEL: Record<ProductType, string> = {
   villa: "Villa",
   hotel: "Khách sạn",
   resort: "Resort",
+  homestay: "Homestay",
 };
 
 export interface Profile {
@@ -68,6 +69,24 @@ export interface Product {
   weekend_nights?: number[] | null;
   surcharge_note?: string | null;
   contract_summary?: string | null;
+  // Giai đoạn giá linh hoạt (migration 0027)
+  rate_periods?: RatePeriod[] | null;
+  star?: number | null;
+  perks?: string | null;
+  image_link?: string | null;
+}
+
+/** Giai đoạn giá của resort. from/to dạng "YYYY-MM-DD" (theo năm hợp đồng) hoặc "MM-DD" (lặp lại mỗi năm). */
+export interface RatePeriod {
+  key: string;
+  name: string;
+  ranges: { from: string; to: string }[];
+  /** true = giai đoạn này áp dụng cho các ngày trong lịch ngày lễ chung của app */
+  holiday?: boolean;
+}
+export interface PeriodPrice {
+  wd: number | null; // giá ngày thường (hoặc giá cả tuần nếu không chia cuối tuần)
+  we: number | null; // giá cuối tuần (null = như ngày thường)
 }
 
 export interface Holiday {
@@ -104,6 +123,8 @@ export interface HotelRate {
   price_holiday?: number | null;
   discount_percent?: number | null;
   sort_order?: number | null;
+  period_prices?: Record<string, PeriodPrice> | null;
+  max_children?: number | null;
 }
 
 // Bộ lọc dùng chung cho cả tìm kiếm tự nhiên và bộ lọc thủ công
@@ -123,6 +144,7 @@ export interface SearchFilters {
   priceTo?: number;
   budget?: number; // ngân sách "khoảng X" dùng để xếp hạng theo độ gần giá
   date?: string; // YYYY-MM-DD — "Ngày đi", ảnh hưởng giá villa/resort
+  star?: number; // hạng sao tối thiểu (resort / khách sạn)
   checkout?: string; // YYYY-MM-DD — ngày trả phòng (resort/khách sạn tính theo số đêm)
   /** Khung giá khách hỏi khi KHÔNG nói ngày cụ thể (VD "cuối tuần", "ngày
    * thường") — chỉ dùng để TÔ ĐỎ dòng giá tương ứng trên thẻ, không lọc. */

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { BedDouble, Check, MapPin, Star, Users } from "lucide-react";
 import { ProductImage } from "@/components/product-image";
-import { RATE_TIERS, tierPrice } from "@/lib/resort-pricing";
+import { minRatePrice } from "@/lib/resort-pricing";
 import { PRODUCT_TYPE_LABEL, type Product } from "@/lib/types";
 import type { ResortResult } from "@/app/api/search-resort/route";
 import { cn } from "@/lib/utils";
@@ -32,18 +32,10 @@ export function ResortGridCard({
   const best = result.rates.find((r) => r.id === result.bestRateId) ?? result.rates[0];
   const others = result.rates.length - 1;
   const q = best?.quote ?? null;
-  const shown = q ? q.avg : best?.nightly ?? null;
-  // giá gốc (trước ưu đãi) để gạch ngang
-  const base = q
-    ? (() => {
-        const b = q.nights.map((n) => tierPrice(best, n.tier).base);
-        return b.every((x) => x != null) ? Math.round((b as number[]).reduce((a, x) => a + x, 0) / b.length) : null;
-      })()
-    : best
-    ? tierPrice(best, "low_wd").base
-    : null;
+  const shown = q ? q.avg : best ? minRatePrice(best, p) : null;
+  const base = q ? q.avgBase : null;
   const disc = (Number(best?.discount_percent) || 0) > 0 && base != null && shown != null && base > shown;
-  const tierText = q?.tier ? RATE_TIERS.find((t) => t.key === q.tier)!.short : q ? "nhiều mức" : null;
+  const tierText = q ? q.label ?? "nhiều mức giá" : null;
   const amen = AMENITY.filter((a) => p[a.key]).slice(0, 2);
   const href = `/products/${p.id}${checkin ? `?date=${checkin}${checkout ? `&checkout=${checkout}` : ""}` : ""}`;
 
@@ -78,7 +70,10 @@ export function ResortGridCard({
         </div>
 
         <div className="flex flex-1 flex-col gap-1 p-2 lg:gap-1.5 lg:p-3">
-          <h3 className="line-clamp-2 text-[13px] font-bold leading-snug text-ink lg:text-[15px]">{p.product_name}</h3>
+          <h3 className="line-clamp-2 text-[13px] font-bold leading-snug text-ink lg:text-[15px]">
+            {p.product_name}
+            {p.star ? <span className="ml-1 whitespace-nowrap text-[11px] font-bold text-amber-500 lg:text-[12px]">{"★".repeat(p.star)}</span> : null}
+          </h3>
           <p className="flex items-center gap-1 text-[11px] font-medium text-teal lg:text-[12.5px]">
             <MapPin className="h-3 w-3 shrink-0" />
             <span className="truncate">{p.sub_region ? `${p.sub_region}, ${p.area}` : p.area}</span>
@@ -132,8 +127,9 @@ export function ResortGridCard({
                   </span>
                 )}
               </div>
+              {q?.outOfContract && <p className="text-[10px] font-semibold text-hot">⚠ Ngoài giai đoạn hợp đồng</p>}
               {q && (
-                <p className="text-[10px] text-ink-muted lg:text-[11px]">
+                <p className="line-clamp-1 text-[10px] text-ink-muted lg:text-[11px]">
                   {tierText}
                   {nights > 1 && q.total != null && (
                     <>

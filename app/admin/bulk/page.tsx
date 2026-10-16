@@ -16,8 +16,8 @@ const SECTIONS = [
   },
   {
     key: "resort",
-    title: "Resort / Hotel",
-    desc: "Hạng phòng × 5 mức giá theo mùa, phụ thu, tóm tắt hợp đồng. Có AI đọc hợp đồng / ảnh bảng giá để tự điền.",
+    title: "Resort / Khách sạn / Homestay",
+    desc: "Giai đoạn giá linh hoạt (thường, cao điểm, đỉnh điểm, lễ Tết), hạng phòng, tiện ích, phụ thu. Dán hợp đồng hoặc ảnh để AI tự điền.",
     icon: Building2,
   },
 ] as const;
@@ -64,7 +64,7 @@ export default function BulkHubPage() {
                 Sửa giá hàng loạt
               </Link>
               <Link
-                href={`/admin/bulk/${key}/add`}
+                href={key === "resort" ? "/admin/bulk/resort/edit?new=1" : `/admin/bulk/${key}/add`}
                 className="block rounded-xl border border-border px-3 py-2.5 text-center text-[13px] font-bold text-ink hover:bg-paper-dim"
               >
                 Thêm hàng loạt

@@ -15,12 +15,13 @@ export async function callAI(
   prompt: string,
   raw: string,
   maxTokens = 900,
-  opts: { image?: AIImage; json?: boolean } = {}
+  opts: { image?: AIImage; images?: AIImage[]; json?: boolean } = {}
 ): Promise<{ text: string | null; error?: string }> {
   const content = raw.trim()
     ? `${prompt}\n\nNỘI DUNG GỐC:\n"""\n${raw.slice(0, 20000)}\n"""`
     : prompt;
   let error: string | undefined;
+  const imgs = [...(opts.images ?? []), ...(opts.image ? [opts.image] : [])].slice(0, 6);
 
   const claude = process.env.ANTHROPIC_API_KEY;
   if (claude) {
@@ -34,9 +35,9 @@ export async function callAI(
           messages: [
             {
               role: "user",
-              content: opts.image
+              content: imgs.length
                 ? [
-                    { type: "image", source: { type: "base64", media_type: opts.image.mime, data: opts.image.data } },
+                    ...imgs.map((im) => ({ type: "image", source: { type: "base64", media_type: im.mime, data: im.data } })),
                     { type: "text", text: content },
                   ]
                 : content,
@@ -67,9 +68,7 @@ export async function callAI(
             contents: [
               {
                 role: "user",
-                parts: opts.image
-                  ? [{ inline_data: { mime_type: opts.image.mime, data: opts.image.data } }, { text: content }]
-                  : [{ text: content }],
+                parts: [...imgs.map((im) => ({ inline_data: { mime_type: im.mime, data: im.data } })), { text: content }],
               },
             ],
             generationConfig: {

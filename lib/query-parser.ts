@@ -37,6 +37,7 @@ const TYPE_KEYWORDS: { keywords: string[]; type: ProductType }[] = [
   { keywords: ["villa", "biet thu"], type: "villa" },
   { keywords: ["resort"], type: "resort" },
   { keywords: ["khach san", "hotel"], type: "hotel" },
+  { keywords: ["homestay", "home stay"], type: "homestay" },
 ];
 
 const AMENITY_KEYWORDS: Record<
@@ -176,6 +177,10 @@ export function parseQuery(
   // "1tr2" / "1 trieu 2" → "1.2 trieu" để đọc đúng ngân sách
   const norm = normalize(rawQuery).replace(/(\d+)\s*(?:tr|trieu)\s*(\d{1,3})(?!\d)/g, "$1.$2 trieu");
 
+  // Hạng sao: "5 sao", "4*", "4 sao tro len"
+  const starM = norm.match(/\b([3-5])\s*(?:sao|\*)/);
+  if (starM) filters.star = parseInt(starM[1], 10);
+
   // Khoảng ngày ở: "10-12/10", "10/10-12/10", "tu 10/10 den 12/10" → ngày đi + ngày về
   const range = parseDateRange(norm, now);
   const date = range?.checkin ?? parseDate(norm, now);
@@ -283,6 +288,7 @@ export function parseQuery(
   }
   remainder = remainder
     .replace(new RegExp(RANGE_RE.source, "g"), " ")
+    .replace(/\b[3-5]\s*(?:sao|\*)/g, " ")
     .replace(/\b(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?\b/g, " ")
     .replace(/\bhom nay\b|\bngay mai\b|\bngay kia\b|\bthu\s*[2-7]\b|\bchu nhat\b|\btuan sau\b|\btuan nay\b/g, " ")
     .replace(/(\d+[.,]?\d*)\s*(ty|tr\b|trieu|k\b|nghin|ngan)/g, " ")

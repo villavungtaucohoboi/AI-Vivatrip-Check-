@@ -1,33 +1,45 @@
-import type { Holiday, HotelRate, Product } from "@/lib/types";
+import type { Holiday, HotelRate, PeriodPrice, Product, RatePeriod } from "@/lib/types";
 
 /**
- * GIÁ RESORT / KHÁCH SẠN THEO MÙA
- * Mỗi hạng phòng có 5 mức: thấp điểm (ngày thường / cuối tuần), cao điểm
- * (ngày thường / cuối tuần), lễ Tết. Mỗi ĐÊM được xếp vào đúng 1 mức:
- *  - ngày lễ (bảng holidays chung của app) → lễ Tết
- *  - nằm trong mùa cao điểm của resort → cao điểm, ngược lại thấp điểm
- *  - đêm thuộc "cuối tuần" của resort (mặc định T6, T7) → cuối tuần
+ * GIÁ RESORT / KHÁCH SẠN / HOMESTAY THEO GIAI ĐOẠN
+ * Mỗi resort tự khai các GIAI ĐOẠN (VD: Thường · Cao điểm · Đỉnh điểm · Lễ Tết),
+ * mỗi giai đoạn gồm 1 hay nhiều khoảng ngày. Mỗi hạng phòng có giá cho từng
+ * giai đoạn, tuỳ chọn tách riêng giá CUỐI TUẦN.
+ * Mỗi ĐÊM được xếp vào 1 "ô giá" = giai đoạn + (ngày thường | cuối tuần):
+ *  - ngày lễ (lịch chung của app) → giai đoạn có đánh dấu "Lễ" (nếu có)
+ *  - nằm trong khoảng ngày của giai đoạn nào → giai đoạn đó
+ *    (trùng nhiều giai đoạn → lấy giai đoạn khai SAU, VD Đỉnh điểm đè Cao điểm)
+ *  - không khớp khoảng nào → giai đoạn ĐẦU TIÊN (thường là giá thường)
+ *  - đêm thuộc "cuối tuần" của resort (mặc định T6, T7) + có giá cuối tuần → giá cuối tuần
+ *
+ * Dữ liệu cũ (5 cột giá thấp/cao điểm) vẫn đọc được: tự quy đổi thành 3 giai đoạn.
  */
 
-export type RateTier = "low_wd" | "low_we" | "high_wd" | "high_we" | "holiday";
+type PricingProduct = Pick<Product, "high_seasons" | "weekend_nights" | "rate_periods">;
 
-export const RATE_TIERS: { key: RateTier; label: string; short: string; group: string; sub: string }[] = [
-  { key: "low_wd", label: "Thấp điểm · T2–T5", short: "Thấp · thường", group: "Thấp điểm", sub: "Ngày thường" },
-  { key: "low_we", label: "Thấp điểm · Cuối tuần", short: "Thấp · cuối tuần", group: "Thấp điểm", sub: "Cuối tuần" },
-  { key: "high_wd", label: "Cao điểm · T2–T5", short: "Cao · thường", group: "Cao điểm", sub: "Ngày thường" },
-  { key: "high_we", label: "Cao điểm · Cuối tuần", short: "Cao · cuối tuần", group: "Cao điểm", sub: "Cuối tuần" },
-  { key: "holiday", label: "Lễ / Tết", short: "Lễ / Tết", group: "Lễ / Tết", sub: "" },
+/** Ô giá: "<periodKey>|wd" hoặc "<periodKey>|we" */
+export type SlotKey = string;
+
+const LEGACY_PERIODS = (p: PricingProduct): RatePeriod[] => [
+  { key: "low", name: "Thấp điểm", ranges: [] },
+  { key: "high", name: "Cao điểm", ranges: p.high_seasons ?? [] },
+  { key: "holiday", name: "Lễ / Tết", ranges: [], holiday: true },
 ];
 
-const FIELD: Record<RateTier, keyof HotelRate> = {
-  low_wd: "price_low_weekday",
-  low_we: "price_low_weekend",
-  high_wd: "price_high_weekday",
-  high_we: "price_high_weekend",
-  holiday: "price_holiday",
-};
+export function getPeriods(p: PricingProduct): RatePeriod[] {
+  return p.rate_periods?.length ? p.rate_periods : LEGACY_PERIODS(p);
+}
 
-type SeasonProduct = Pick<Product, "high_seasons" | "weekend_nights">;
+const num = (v: unknown): number | null => (v != null && Number(v) > 0 ? Number(v) : null);
+
+export function getRoomPrices(rate: HotelRate, p: PricingProduct): Record<string, PeriodPrice> {
+  if (p.rate_periods?.length) return rate.period_prices ?? {};
+  return {
+    low: { wd: num(rate.price_low_weekday) ?? num(rate.price), we: num(rate.price_low_weekend) },
+    high: { wd: num(rate.price_high_weekday), we: num(rate.price_high_weekend) },
+    holiday: { wd: num(rate.price_holiday), we: null },
+  };
+}
 
 function iso(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -37,70 +49,108 @@ export function parseISO(s: string): Date {
   return new Date(y, m - 1, d);
 }
 
-/** "06-01" ≤ md ≤ "08-31"; hỗ trợ khoảng vắt qua năm mới ("12-20" → "01-05"). */
-function inSeason(md: string, from: string, to: string): boolean {
-  return from <= to ? md >= from && md <= to : md >= from || md <= to;
+/** Khoảng "YYYY-MM-DD" so theo ngày đầy đủ; khoảng "MM-DD" lặp mỗi năm (hỗ trợ vắt qua năm mới). */
+function inRange(dateIso: string, r: { from: string; to: string }): boolean {
+  if (r.from.length === 10 && r.to.length === 10) return dateIso >= r.from && dateIso <= r.to;
+  const md = dateIso.slice(5);
+  const f = r.from.slice(-5);
+  const t = r.to.slice(-5);
+  return f <= t ? md >= f && md <= t : md >= f || md <= t;
 }
 
-export function isHighSeason(date: Date, product: SeasonProduct): boolean {
-  const md = iso(date).slice(5);
-  return (product.high_seasons ?? []).some((s) => s?.from && s?.to && inSeason(md, s.from, s.to));
+export interface NightSlot {
+  date: string;
+  period: RatePeriod;
+  weekend: boolean;
+  /** false = ngày nằm ngoài mọi khoảng ngày trong hợp đồng (đang tạm dùng giai đoạn đầu) */
+  inContract: boolean;
 }
 
-export function nightTier(date: Date, product: SeasonProduct, holidays: Holiday[]): RateTier {
-  if (holidays.some((h) => h.holiday_date === iso(date))) return "holiday";
-  const weekend = (product.weekend_nights?.length ? product.weekend_nights : [5, 6]).includes(date.getDay());
-  const high = isHighSeason(date, product);
-  return high ? (weekend ? "high_we" : "high_wd") : weekend ? "low_we" : "low_wd";
-}
-
-/** Giá gốc của 1 mức; thiếu thì lấy mức gần nhất hợp lý (để không ra "Liên hệ" oan). */
-export function tierBase(rate: HotelRate, tier: RateTier): number | null {
-  const get = (t: RateTier) => {
-    const v = rate[FIELD[t]] as number | null | undefined;
-    return v != null && Number(v) > 0 ? Number(v) : null;
+export function nightSlot(date: Date, p: PricingProduct, holidays: Holiday[]): NightSlot {
+  const periods = getPeriods(p);
+  const d = iso(date);
+  const weekend = (p.weekend_nights?.length ? p.weekend_nights : [5, 6]).includes(date.getDay());
+  const holidayPeriod = periods.find((x) => x.holiday);
+  if (holidayPeriod && holidays.some((h) => h.holiday_date === d)) return { date: d, period: holidayPeriod, weekend, inContract: true };
+  let match: RatePeriod | null = null;
+  for (const per of periods) if (!per.holiday && per.ranges.some((r) => inRange(d, r))) match = per;
+  const hasFullDates = periods.some((x) => x.ranges.some((r) => r.from.length === 10));
+  const first = periods.find((x) => !x.holiday) ?? periods[0];
+  return {
+    date: d,
+    period: match ?? first,
+    weekend,
+    // Hợp đồng ghi ngày cụ thể mà ngày khách đi không thuộc khoảng nào → cảnh báo
+    inContract: !!match || !hasFullDates || periods[0].ranges.length === 0,
   };
-  const fallback: Record<RateTier, RateTier[]> = {
-    low_wd: ["low_wd"],
-    low_we: ["low_we", "low_wd"],
-    high_wd: ["high_wd", "low_wd"],
-    high_we: ["high_we", "high_wd", "low_we", "low_wd"],
-    holiday: ["holiday", "high_we", "low_we", "low_wd"],
-  };
-  for (const t of fallback[tier]) {
-    const v = get(t);
-    if (v != null) return v;
-  }
-  return rate.price > 0 ? Number(rate.price) : null;
+}
+
+/** Giá gốc 1 đêm theo ô giá; thiếu giá cuối tuần → dùng giá ngày thường; thiếu cả → giai đoạn đầu. */
+export function slotBase(rate: HotelRate, p: PricingProduct, periodKey: string, weekend: boolean): number | null {
+  const prices = getRoomPrices(rate, p);
+  const pp = prices[periodKey];
+  const v = pp ? (weekend ? pp.we ?? pp.wd : pp.wd ?? pp.we) : null;
+  if (v != null) return Number(v);
+  const first = getPeriods(p).find((x) => !x.holiday);
+  const fp = first ? prices[first.key] : undefined;
+  const f = fp ? (weekend ? fp.we ?? fp.wd : fp.wd ?? fp.we) : null;
+  return f != null ? Number(f) : num(rate.price);
 }
 
 export function applyDiscount(price: number | null, pct: number | null | undefined): number | null {
   if (price == null) return null;
-  const p = Number(pct) || 0;
-  return p > 0 ? Math.round((price * (100 - p)) / 100 / 1000) * 1000 : price;
+  const v = Number(pct) || 0;
+  return v > 0 ? Math.round((price * (100 - v)) / 100 / 1000) * 1000 : price;
 }
 
-export function tierPrice(rate: HotelRate, tier: RateTier): { base: number | null; final: number | null } {
-  const base = tierBase(rate, tier);
+export function slotPrice(rate: HotelRate, p: PricingProduct, periodKey: string, weekend: boolean) {
+  const base = slotBase(rate, p, periodKey, weekend);
   return { base, final: applyDiscount(base, rate.discount_percent) };
 }
 
-export interface StayQuote {
-  nights: { date: string; tier: RateTier; price: number | null }[];
-  total: number | null;
-  avg: number | null;
-  /** Mức áp dụng nếu mọi đêm cùng 1 mức; null nếu lẫn nhiều mức */
-  tier: RateTier | null;
+/** Các CỘT giá để hiển thị: mỗi giai đoạn 1 cột, giai đoạn nào có giá cuối tuần riêng thì tách 2 cột. */
+export interface PriceColumn {
+  key: SlotKey;
+  periodKey: string;
+  weekend: boolean;
+  title: string;
+  sub: string;
+  ranges: string;
+}
+export function priceColumns(p: PricingProduct, rates: HotelRate[]): PriceColumn[] {
+  const cols: PriceColumn[] = [];
+  for (const per of getPeriods(p)) {
+    const anyWd = rates.some((r) => getRoomPrices(r, p)[per.key]?.wd != null);
+    const anyWe = rates.some((r) => getRoomPrices(r, p)[per.key]?.we != null);
+    if (!anyWd && !anyWe) continue;
+    const ranges = per.holiday ? "Theo lịch ngày lễ" : per.ranges.map(fmtRange).join(" · ");
+    if (anyWe) {
+      cols.push({ key: `${per.key}|wd`, periodKey: per.key, weekend: false, title: per.name, sub: "Ngày thường", ranges });
+      cols.push({ key: `${per.key}|we`, periodKey: per.key, weekend: true, title: per.name, sub: "Cuối tuần", ranges });
+    } else {
+      cols.push({ key: `${per.key}|wd`, periodKey: per.key, weekend: false, title: per.name, sub: "", ranges });
+    }
+  }
+  return cols;
 }
 
-/** Báo giá 1 hạng phòng cho cả kỳ ở (checkin → checkout, mặc định 1 đêm). */
-export function quoteStay(
-  rate: HotelRate,
-  product: SeasonProduct,
-  holidays: Holiday[],
-  checkin: string,
-  checkout?: string
-): StayQuote {
+/** Ô giá (cột) mà 1 đêm rơi vào. */
+export function slotKeyOf(n: NightSlot, p: PricingProduct, rates: HotelRate[]): SlotKey {
+  const hasWe = rates.some((r) => getRoomPrices(r, p)[n.period.key]?.we != null);
+  return `${n.period.key}|${n.weekend && hasWe ? "we" : "wd"}`;
+}
+
+export interface StayQuote {
+  nights: { date: string; periodKey: string; periodName: string; weekend: boolean; price: number | null; base: number | null; inContract: boolean }[];
+  total: number | null;
+  avg: number | null;
+  avgBase: number | null;
+  /** Nhãn mức giá nếu mọi đêm cùng 1 mức, null nếu lẫn nhiều mức */
+  label: string | null;
+  outOfContract: boolean;
+}
+
+export function quoteStay(rate: HotelRate, p: PricingProduct, holidays: Holiday[], checkin: string, checkout?: string): StayQuote {
   const start = parseISO(checkin);
   let n = 1;
   if (checkout) {
@@ -111,38 +161,74 @@ export function quoteStay(
   for (let i = 0; i < n; i++) {
     const d = new Date(start);
     d.setDate(start.getDate() + i);
-    const tier = nightTier(d, product, holidays);
-    nights.push({ date: iso(d), tier, price: tierPrice(rate, tier).final });
+    const s = nightSlot(d, p, holidays);
+    const hasWe = getRoomPrices(rate, p)[s.period.key]?.we != null;
+    const we = s.weekend && hasWe;
+    const { base, final } = slotPrice(rate, p, s.period.key, we);
+    nights.push({ date: s.date, periodKey: s.period.key, periodName: s.period.name, weekend: we, price: final, base, inContract: s.inContract });
   }
   const ok = nights.every((x) => x.price != null);
   const total = ok ? nights.reduce((a, x) => a + (x.price as number), 0) : null;
-  const tiers = new Set(nights.map((x) => x.tier));
-  return { nights, total, avg: total != null ? Math.round(total / n) : null, tier: tiers.size === 1 ? nights[0].tier : null };
+  const okB = nights.every((x) => x.base != null);
+  const totalB = okB ? nights.reduce((a, x) => a + (x.base as number), 0) : null;
+  const labels = new Set(nights.map((x) => `${x.periodName}${x.weekend ? " · cuối tuần" : ""}`));
+  return {
+    nights,
+    total,
+    avg: total != null ? Math.round(total / n) : null,
+    avgBase: totalB != null ? Math.round(totalB / n) : null,
+    label: labels.size === 1 ? [...labels][0] : null,
+    outOfContract: nights.some((x) => !x.inContract),
+  };
 }
 
-/** Giá thấp nhất của hạng phòng (để sắp xếp / hiện "từ ..."). */
-export function minRatePrice(rate: HotelRate): number | null {
-  const all = RATE_TIERS.map((t) => tierPrice(rate, t.key).final).filter((x): x is number => x != null);
-  return all.length ? Math.min(...all) : null;
+/** Giá thấp nhất của hạng phòng (sau ưu đãi). */
+export function minRatePrice(rate: HotelRate, p: PricingProduct): number | null {
+  const all: number[] = [];
+  for (const pp of Object.values(getRoomPrices(rate, p))) {
+    for (const v of [pp?.wd, pp?.we]) if (v != null && Number(v) > 0) all.push(Number(v));
+  }
+  if (!all.length && num(rate.price)) all.push(Number(rate.price));
+  return all.length ? applyDiscount(Math.min(...all), rate.discount_percent) : null;
 }
 
-/** "06-01" → "01/06" */
-export function fmtMD(md: string): string {
-  const [m, d] = md.split("-");
+/** "2026-06-01" → "01/06/26"; "06-01" → "01/06" */
+export function fmtDay(s: string): string {
+  if (s.length === 10) {
+    const [y, m, d] = s.split("-");
+    return `${d}/${m}/${y.slice(2)}`;
+  }
+  const [m, d] = s.split("-");
   return `${d}/${m}`;
 }
+export function fmtRange(r: { from: string; to: string }): string {
+  return `${fmtDay(r.from)}–${fmtDay(r.to)}`;
+}
 
-/** Chuỗi admin nhập "01/06-31/08; 20/12-05/01" ↔ mảng mùa cao điểm. */
-export function parseSeasons(text: string): { from: string; to: string }[] {
+/**
+ * Chuỗi Admin gõ ↔ khoảng ngày. Nhận: "02/01-31/05; 03/09-23/12" (lặp mỗi năm)
+ * hoặc "02/01/2026-31/05/2026" (đúng năm hợp đồng).
+ */
+export function parseRanges(text: string): { from: string; to: string }[] {
   const out: { from: string; to: string }[] = [];
-  for (const part of text.split(/[;\n,]+/)) {
-    const m = part.match(/(\d{1,2})\s*\/\s*(\d{1,2})\s*(?:-|–|—|đến|to)\s*(\d{1,2})\s*\/\s*(\d{1,2})/i);
-    if (!m) continue;
-    const p2 = (x: string) => x.padStart(2, "0");
-    out.push({ from: `${p2(m[2])}-${p2(m[1])}`, to: `${p2(m[4])}-${p2(m[3])}` });
+  const p2 = (x: string) => x.padStart(2, "0");
+  const yr = (y?: string) => (y ? (y.length === 2 ? `20${y}` : y) : "");
+  const re = /(\d{1,2})\s*\/\s*(\d{1,2})(?:\s*\/\s*(\d{2,4}))?\s*(?:-|–|—|đến|to)\s*(\d{1,2})\s*\/\s*(\d{1,2})(?:\s*\/\s*(\d{2,4}))?/gi;
+  for (const m of text.matchAll(re)) {
+    const y1 = yr(m[3]);
+    const y2 = yr(m[6]) || y1;
+    const from = y1 ? `${y1}-${p2(m[2])}-${p2(m[1])}` : `${p2(m[2])}-${p2(m[1])}`;
+    const to = y2 ? `${y2}-${p2(m[5])}-${p2(m[4])}` : `${p2(m[5])}-${p2(m[4])}`;
+    out.push({ from: from.length === 5 && to.length === 10 ? `${to.slice(0, 4)}-${from}` : from, to });
   }
   return out;
 }
-export function seasonsToText(s: { from: string; to: string }[] | null | undefined): string {
-  return (s ?? []).map((x) => `${fmtMD(x.from)}-${fmtMD(x.to)}`).join("; ");
+export function rangesToText(r: { from: string; to: string }[] | null | undefined): string {
+  return (r ?? [])
+    .map((x) => {
+      const f = x.from.length === 10 ? `${x.from.slice(8)}/${x.from.slice(5, 7)}/${x.from.slice(0, 4)}` : `${x.from.slice(3)}/${x.from.slice(0, 2)}`;
+      const t = x.to.length === 10 ? `${x.to.slice(8)}/${x.to.slice(5, 7)}/${x.to.slice(0, 4)}` : `${x.to.slice(3)}/${x.to.slice(0, 2)}`;
+      return `${f}-${t}`;
+    })
+    .join("; ");
 }

@@ -1,51 +1,25 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { ChevronDown, ImagePlus, Loader2, Plus, Sparkles, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ChevronDown, ClipboardPaste, ImagePlus, Loader2, Plus, Sparkles, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { BulkSaveBar, NumCell, useUnsavedGuard } from "@/components/admin/bulk/bulk-ui";
 import { compressImage } from "@/lib/compress-image";
-import { parseSeasons, seasonsToText } from "@/lib/resort-pricing";
+import { getPeriods, getRoomPrices, parseRanges, rangesToText } from "@/lib/resort-pricing";
 import { cn } from "@/lib/utils";
 import { PRODUCT_TYPE_LABEL, type HotelRate, type Product } from "@/lib/types";
 
-export type ResortRow = Pick<
-  Product,
-  "id" | "product_code" | "product_name" | "area" | "type" | "high_seasons" | "weekend_nights" | "surcharge_note" | "contract_summary"
->;
+export type ResortRow = Product;
 
-interface Room {
-  key: string;
-  id?: string;
-  room_type: string;
-  area_m2: number | null;
-  bed: string;
-  capacity: number | null;
-  breakfast: boolean;
-  discount_percent: number | null;
-  price_low_weekday: number | null;
-  price_low_weekend: number | null;
-  price_high_weekday: number | null;
-  price_high_weekend: number | null;
-  price_holiday: number | null;
-}
-interface State {
-  seasons: string;
-  weekend: number[];
-  surcharge: string;
-  contract: string;
-  rooms: Room[];
-  deleted: string[];
-}
-
-const PRICE_COLS: { k: keyof Room; label: string; sub: string }[] = [
-  { k: "price_low_weekday", label: "Thấp điểm", sub: "T2–T5" },
-  { k: "price_low_weekend", label: "Thấp điểm", sub: "Cuối tuần" },
-  { k: "price_high_weekday", label: "Cao điểm", sub: "T2–T5" },
-  { k: "price_high_weekend", label: "Cao điểm", sub: "Cuối tuần" },
-  { k: "price_holiday", label: "Lễ / Tết", sub: "" },
-];
+const AMENITIES = [
+  { k: "pool", l: "Hồ bơi" },
+  { k: "near_beach", l: "Sát biển" },
+  { k: "sea_view", l: "View biển" },
+  { k: "near_lake", l: "View hồ" },
+  { k: "karaoke", l: "Karaoke" },
+  { k: "bbq", l: "BBQ" },
+  { k: "pickleball", l: "Pickleball" },
+] as const;
 const DAYS = [
   { d: 1, l: "T2" },
   { d: 2, l: "T3" },
@@ -55,112 +29,253 @@ const DAYS = [
   { d: 6, l: "T7" },
   { d: 0, l: "CN" },
 ];
+type ResortType = "resort" | "hotel" | "homestay";
 
-let keySeq = 0;
-const newKey = () => `k${++keySeq}`;
-/** Gõ "1650" → hiểu là 1.650.000 (giá phòng hiếm khi dưới 100k). */
-const money = (v: number | null) => (v != null && v > 0 && v < 100000 ? v * 1000 : v);
-
-function toRoom(r: HotelRate): Room {
-  return {
-    key: newKey(),
-    id: r.id,
-    room_type: r.room_type,
-    area_m2: r.area_m2 ?? null,
-    bed: r.bed ?? "",
-    capacity: r.capacity,
-    breakfast: r.breakfast,
-    discount_percent: r.discount_percent ? Number(r.discount_percent) : null,
-    price_low_weekday: r.price_low_weekday != null ? Number(r.price_low_weekday) : Number(r.price) || null,
-    price_low_weekend: r.price_low_weekend != null ? Number(r.price_low_weekend) : null,
-    price_high_weekday: r.price_high_weekday != null ? Number(r.price_high_weekday) : null,
-    price_high_weekend: r.price_high_weekend != null ? Number(r.price_high_weekend) : null,
-    price_holiday: r.price_holiday != null ? Number(r.price_holiday) : null,
-  };
+interface Period {
+  key: string;
+  name: string;
+  rangesText: string;
+  weekendSplit: boolean;
+  holiday: boolean;
 }
-function initState(p: ResortRow, rates: HotelRate[]): State {
+interface Room {
+  key: string;
+  id?: string;
+  room_type: string;
+  area_m2: number | null;
+  bed: string;
+  capacity: number | null;
+  max_children: number | null;
+  breakfast: boolean;
+  extra_bed_price: number | null;
+  discount_percent: number | null;
+  prices: Record<string, { wd: number | null; we: number | null }>;
+}
+interface Block {
+  key: string;
+  id?: string;
+  info: {
+    product_code: string;
+    product_name: string;
+    type: ResortType;
+    area: string;
+    address: string;
+    star: number | null;
+    image_link: string;
+    perks: string;
+    amenities: Record<string, boolean>;
+  };
+  periods: Period[];
+  weekend: number[];
+  surcharge: string;
+  contract: string;
+  rooms: Room[];
+  deleted: string[];
+}
+
+let seq = 0;
+const nk = (p = "k") => `${p}${Date.now().toString(36)}${++seq}`;
+/** Gõ "1650" → hiểu 1.650.000 */
+const money = (v: number | null) => (v != null && v > 0 && v < 100000 ? v * 1000 : v);
+const plain = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/gi, "d").toLowerCase().trim();
+
+function fromProduct(p: Product, rates: HotelRate[]): Block {
+  const periods = getPeriods(p);
+  const own = rates.filter((r) => r.product_id === p.id).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.price - b.price);
+  const usedKeys = new Set<string>();
+  const anyWe = new Set<string>();
+  own.forEach((r) =>
+    Object.entries(getRoomPrices(r, p)).forEach(([k, v]) => {
+      if (v?.wd != null || v?.we != null) usedKeys.add(k);
+      if (v?.we != null) anyWe.add(k);
+    })
+  );
+  // Dữ liệu cũ: chỉ giữ các giai đoạn đang có giá
+  const keep = p.rate_periods?.length ? periods : periods.filter((x) => usedKeys.has(x.key) || x.key === "low");
   return {
-    seasons: seasonsToText(p.high_seasons),
+    key: p.id,
+    id: p.id,
+    info: {
+      product_code: p.product_code ?? "",
+      product_name: p.product_name,
+      type: (p.type as ResortType) ?? "resort",
+      area: p.area ?? "",
+      address: p.address ?? "",
+      star: p.star ?? null,
+      image_link: p.image_link ?? "",
+      perks: p.perks ?? "",
+      amenities: Object.fromEntries(AMENITIES.map((a) => [a.k, !!p[a.k]])),
+    },
+    periods: keep.map((x) => ({ key: x.key, name: x.name, rangesText: rangesToText(x.ranges), weekendSplit: anyWe.has(x.key), holiday: !!x.holiday })),
     weekend: p.weekend_nights?.length ? p.weekend_nights : [5, 6],
     surcharge: p.surcharge_note ?? "",
     contract: p.contract_summary ?? "",
-    rooms: rates
-      .filter((r) => r.product_id === p.id)
-      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.price - b.price)
-      .map(toRoom),
+    rooms: own.map((r) => ({
+      key: nk(),
+      id: r.id,
+      room_type: r.room_type,
+      area_m2: r.area_m2 ?? null,
+      bed: r.bed ?? "",
+      capacity: r.capacity,
+      max_children: r.max_children ?? null,
+      breakfast: r.breakfast,
+      extra_bed_price: r.extra_bed_price != null ? Number(r.extra_bed_price) : null,
+      discount_percent: r.discount_percent ? Number(r.discount_percent) : null,
+      prices: Object.fromEntries(Object.entries(getRoomPrices(r, p)).map(([k, v]) => [k, { wd: v?.wd ?? null, we: v?.we ?? null }])),
+    })),
     deleted: [],
   };
 }
-const snapshot = (s: State) =>
-  JSON.stringify({ ...s, rooms: s.rooms.map(({ key: _k, ...r }) => r) });
-const plain = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/gi, "d").toLowerCase().trim();
+function emptyBlock(type: ResortType = "resort"): Block {
+  return {
+    key: nk("new"),
+    info: { product_code: "", product_name: "", type, area: "", address: "", star: null, image_link: "", perks: "", amenities: {} },
+    periods: [{ key: "p1", name: "Giá chung", rangesText: "", weekendSplit: false, holiday: false }],
+    weekend: [5, 6],
+    surcharge: "",
+    contract: "",
+    rooms: [],
+    deleted: [],
+  };
+}
+const emptyRoom = (): Room => ({
+  key: nk(),
+  room_type: "",
+  area_m2: null,
+  bed: "",
+  capacity: 2,
+  max_children: null,
+  breakfast: true,
+  extra_bed_price: null,
+  discount_percent: null,
+  prices: {},
+});
+const snap = (b: Block) => JSON.stringify({ ...b, key: undefined, rooms: b.rooms.map(({ key: _k, ...r }) => r) });
 
-export function ResortPricingSheet({ resorts, rates }: { resorts: ResortRow[]; rates: HotelRate[] }) {
-  const router = useRouter();
-  const [state, setState] = useState<Record<string, State>>(() => Object.fromEntries(resorts.map((p) => [p.id, initState(p, rates)])));
+/** Kết quả AI → khối resort (giữ id hạng phòng cũ trùng tên). */
+function applyAI(b: Block, ai: AIRes): Block {
+  const byName = new Map(b.rooms.map((r) => [plain(r.room_type), r]));
+  const rooms: Room[] = ai.rooms.map((r) => {
+    const old = byName.get(plain(r.room_type));
+    if (old) byName.delete(plain(r.room_type));
+    return {
+      key: old?.key ?? nk(),
+      id: old?.id,
+      room_type: r.room_type,
+      area_m2: r.area_m2 ?? old?.area_m2 ?? null,
+      bed: r.bed ?? old?.bed ?? "",
+      capacity: r.capacity ?? old?.capacity ?? null,
+      max_children: r.max_children ?? old?.max_children ?? null,
+      breakfast: r.breakfast,
+      extra_bed_price: r.extra_bed_price ?? old?.extra_bed_price ?? null,
+      discount_percent: old?.discount_percent ?? null,
+      prices: r.prices,
+    };
+  });
+  const res = ai.resort;
+  return {
+    ...b,
+    info: {
+      ...b.info,
+      product_name: b.info.product_name || res.name,
+      type: b.id ? b.info.type : (res.type as ResortType),
+      area: b.info.area || res.area,
+      address: b.info.address || res.address,
+      star: res.star ?? b.info.star,
+      image_link: res.image_link || b.info.image_link,
+      perks: res.perks || b.info.perks,
+      amenities: { ...b.info.amenities, ...Object.fromEntries(Object.entries(res.amenities).filter(([, v]) => v)) },
+    },
+    periods: ai.periods.map((p) => ({
+      key: p.key,
+      name: p.name,
+      rangesText: rangesToText(p.ranges),
+      weekendSplit: p.weekend_split || rooms.some((r) => r.prices[p.key]?.we != null),
+      holiday: p.holiday,
+    })),
+    weekend: ai.weekend_nights?.length ? ai.weekend_nights : b.weekend,
+    surcharge: ai.surcharge_note || b.surcharge,
+    contract: ai.contract_summary || b.contract,
+    // hạng phòng cũ không có trong tài liệu → xoá (Admin bấm Hoàn tác nếu không muốn)
+    rooms,
+    deleted: [...b.deleted, ...[...byName.values()].map((r) => r.id).filter((x): x is string => !!x)],
+  };
+}
+
+export function ResortPricingSheet({ resorts, rates, openNew = false }: { resorts: ResortRow[]; rates: HotelRate[]; openNew?: boolean }) {
+  const [blocks, setBlocks] = useState<Block[]>(() => resorts.map((p) => fromProduct(p, rates)));
   const [origin, setOrigin] = useState<Record<string, string>>(() =>
-    Object.fromEntries(resorts.map((p) => [p.id, snapshot(initState(p, rates))]))
+    Object.fromEntries(resorts.map((p) => [p.id, snap(fromProduct(p, rates))]))
   );
   const [q, setQ] = useState("");
-  const [type, setType] = useState<"" | "resort" | "hotel">("");
-  const [openSettings, setOpenSettings] = useState<Set<string>>(new Set());
-  const [aiFor, setAiFor] = useState<ResortRow | null>(null);
+  const [type, setType] = useState<"" | ResortType>("");
+  const [open, setOpen] = useState<Set<string>>(new Set());
+  const [aiFor, setAiFor] = useState<string | "new" | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const dirtyIds = useMemo(() => resorts.filter((p) => snapshot(state[p.id]) !== origin[p.id]).map((p) => p.id), [resorts, state, origin]);
-  useUnsavedGuard(dirtyIds.length > 0);
+  useEffect(() => {
+    if (openNew) setAiFor("new");
+  }, [openNew]);
 
-  const visible = resorts.filter(
-    (p) => (!type || p.type === type) && (!q.trim() || plain(`${p.product_name} ${p.product_code} ${p.area}`).includes(plain(q)))
+  const dirty = useMemo(() => blocks.filter((b) => !b.id || snap(b) !== origin[b.key]), [blocks, origin]);
+  useUnsavedGuard(dirty.length > 0);
+
+  const visible = blocks.filter(
+    (b) =>
+      !b.id ||
+      ((!type || b.info.type === type) && (!q.trim() || plain(`${b.info.product_name} ${b.info.product_code} ${b.info.area}`).includes(plain(q))))
   );
 
-  const upd = (id: string, fn: (s: State) => State) => setState((prev) => ({ ...prev, [id]: fn(prev[id]) }));
-  const updRoom = (id: string, key: string, p: Partial<Room>) =>
-    upd(id, (s) => ({ ...s, rooms: s.rooms.map((r) => (r.key === key ? { ...r, ...p } : r)) }));
+  const upd = (key: string, fn: (b: Block) => Block) => setBlocks((prev) => prev.map((b) => (b.key === key ? fn(b) : b)));
+  const updRoom = (bk: string, rk: string, p: Partial<Room>) => upd(bk, (b) => ({ ...b, rooms: b.rooms.map((r) => (r.key === rk ? { ...r, ...p } : r)) }));
+  const toggleOpen = (k: string) =>
+    setOpen((prev) => {
+      const s = new Set(prev);
+      if (s.has(k)) s.delete(k);
+      else s.add(k);
+      return s;
+    });
 
   async function saveAll() {
-    if (!dirtyIds.length) return;
+    if (!dirty.length) return;
+    const bad = dirty.find((b) => !b.info.product_name.trim() || !b.info.area.trim());
+    if (bad) return void toast.error("Resort mới cần có Tên và Khu vực.");
     setSaving(true);
     try {
-      const payload = dirtyIds.map((id) => {
-        const s = state[id];
-        return {
-          id,
-          settings: {
-            high_seasons: parseSeasons(s.seasons),
-            weekend_nights: s.weekend,
-            surcharge_note: s.surcharge,
-            contract_summary: s.contract,
-          },
-          rooms: s.rooms.map(({ key: _k, bed, ...r }, i) => ({ ...r, bed, sort_order: i })),
-          deleted: s.deleted,
-        };
-      });
+      const payload = dirty.map((b) => ({
+        id: b.id,
+        clientKey: b.key,
+        info: b.info,
+        periods: b.periods.map((p) => ({ key: p.key, name: p.name, ranges: parseRanges(p.rangesText), holiday: p.holiday })),
+        weekend_nights: b.weekend,
+        surcharge_note: b.surcharge,
+        contract_summary: b.contract,
+        rooms: b.rooms.map(({ key: _k, prices, ...r }) => ({
+          ...r,
+          // chỉ gửi giá của các giai đoạn còn tồn tại; giai đoạn không tách cuối tuần → bỏ giá cuối tuần
+          period_prices: Object.fromEntries(
+            b.periods.map((p) => [p.key, { wd: prices[p.key]?.wd ?? null, we: p.weekendSplit ? prices[p.key]?.we ?? null : null }])
+          ),
+        })),
+        deleted: b.deleted,
+      }));
       const res = await fetch("/api/admin/bulk/resort-pricing", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ resorts: payload }),
       });
-      const data = (await res.json()) as { saved?: number; failed?: { id: string; error: string }[]; error?: string };
+      const data = (await res.json()) as { saved?: number; failed?: { key: string; error: string }[]; error?: string };
       if (!res.ok) throw new Error(data.error || "Lưu thất bại");
-      const failed = new Map((data.failed ?? []).map((f) => [f.id, f.error]));
-      if (failed.size) {
-        const first = [...failed.entries()][0];
-        toast.error(`${resorts.find((p) => p.id === first[0])?.product_name}: ${first[1]}`);
+      if (data.failed?.length) {
+        const f = data.failed[0];
+        const name = blocks.find((b) => b.key === f.key)?.info.product_name || "Resort mới";
+        toast.error(`${name}: ${f.error}`);
       }
-      toast.success(`Đã lưu ${data.saved ?? 0} resort.`);
-      // Có hạng phòng mới → tải lại trang để nhận id (tránh lưu trùng lần sau)
-      if (!failed.size && payload.some((x) => x.rooms.some((r) => !r.id) || x.deleted.length)) {
-        setOrigin(Object.fromEntries(resorts.map((p) => [p.id, snapshot(state[p.id])])));
-        setTimeout(() => window.location.reload(), 600);
-        return;
+      if (data.saved) {
+        toast.success(`Đã lưu ${data.saved} nơi — đang tải lại…`);
+        setOrigin(Object.fromEntries(blocks.map((b) => [b.key, snap(b)])));
+        setTimeout(() => window.location.reload(), 700);
       }
-      router.refresh();
-      setOrigin((prev) => {
-        const next = { ...prev };
-        dirtyIds.filter((id) => !failed.has(id)).forEach((id) => (next[id] = snapshot(state[id])));
-        return next;
-      });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Lưu thất bại");
     } finally {
@@ -171,194 +286,349 @@ export function ResortPricingSheet({ resorts, rates }: { resorts: ResortRow[]; r
   return (
     <div className="pb-28">
       <div className="sticky top-16 z-20 -mx-4 flex flex-wrap items-center gap-2 border-b border-border bg-paper/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-2xl sm:border">
+        <button
+          onClick={() => setAiFor("new")}
+          className="flex h-10 items-center gap-1.5 rounded-xl bg-gradient-to-r from-teal to-sand px-4 text-[13px] font-bold text-white shadow-sm"
+        >
+          <Sparkles className="h-4 w-4" /> Thêm mới bằng AI (dán hợp đồng / ảnh)
+        </button>
+        <button
+          onClick={() => {
+            const b = emptyBlock();
+            setBlocks((prev) => [b, ...prev]);
+            setOpen((prev) => new Set(prev).add(b.key));
+          }}
+          className="flex h-10 items-center gap-1 rounded-xl border border-border bg-white px-3 text-[12.5px] font-bold text-ink"
+        >
+          <Plus className="h-4 w-4" /> Thêm tay
+        </button>
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Tìm tên / mã / khu vực…"
-          className="h-10 min-w-[200px] flex-1 rounded-xl border border-border bg-white px-3 text-[13.5px] outline-none focus:border-teal"
+          className="h-10 min-w-[180px] flex-1 rounded-xl border border-border bg-white px-3 text-[13.5px] outline-none focus:border-teal"
         />
-        {(["", "resort", "hotel"] as const).map((t) => (
+        {(["", "resort", "hotel", "homestay"] as const).map((t) => (
           <button
             key={t || "all"}
             onClick={() => setType(t)}
             className={cn("h-10 rounded-xl px-3 text-[12.5px] font-bold", type === t ? "bg-teal text-white" : "border border-border bg-white text-ink-muted")}
           >
-            {t === "" ? "Tất cả" : t === "resort" ? "Resort" : "Khách sạn"}
+            {t === "" ? "Tất cả" : PRODUCT_TYPE_LABEL[t]}
           </button>
         ))}
-        <span className="text-[12px] text-ink-muted">Gõ giá kiểu “1650” = 1.650.000đ · Enter để xuống dòng</span>
       </div>
 
       <div className="mt-3 space-y-4">
-        {visible.map((p) => {
-          const s = state[p.id];
-          const dirty = dirtyIds.includes(p.id);
-          const settingsOpen = openSettings.has(p.id);
+        {visible.map((b) => {
+          const isDirty = dirty.some((d) => d.key === b.key);
+          const isOpen = open.has(b.key) || !b.id;
+          const cols = b.periods.flatMap((p) =>
+            p.weekendSplit
+              ? [
+                  { p, we: false, label: p.name, sub: "Ngày thường" },
+                  { p, we: true, label: p.name, sub: "Cuối tuần" },
+                ]
+              : [{ p, we: false, label: p.name, sub: p.holiday ? "Ngày lễ" : "" }]
+          );
           return (
-            <div key={p.id} className={cn("overflow-hidden rounded-2xl border bg-white", dirty ? "border-sand ring-1 ring-sand/50" : "border-border")}>
+            <div key={b.key} className={cn("overflow-hidden rounded-2xl border bg-white", isDirty ? "border-sand ring-1 ring-sand/50" : "border-border")}>
+              {/* Tiêu đề */}
               <div className="flex flex-wrap items-center gap-2 bg-teal-light/60 px-3 py-2.5">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[14.5px] font-bold text-ink">{p.product_name}</p>
+                  <p className="truncate text-[14.5px] font-bold text-ink">
+                    {b.info.product_name || <span className="text-ink-muted">Resort / khách sạn mới</span>}
+                    {b.info.star ? <span className="ml-1 text-amber-500">{"★".repeat(b.info.star)}</span> : null}
+                  </p>
                   <p className="text-[11.5px] text-ink-muted">
-                    {PRODUCT_TYPE_LABEL[p.type]} · {p.area} · {s.rooms.length} hạng phòng
-                    {dirty && <span className="ml-1.5 rounded bg-sand-light px-1.5 font-semibold text-sand-dark">chưa lưu</span>}
+                    {PRODUCT_TYPE_LABEL[b.info.type]} · {b.info.area || "chưa có khu vực"} · {b.periods.length} giai đoạn · {b.rooms.length} hạng phòng
+                    {!b.id && <span className="ml-1.5 rounded bg-teal px-1.5 font-semibold text-white">MỚI</span>}
+                    {b.id && isDirty && <span className="ml-1.5 rounded bg-sand-light px-1.5 font-semibold text-sand-dark">chưa lưu</span>}
                   </p>
                 </div>
                 <button
-                  onClick={() => setAiFor(p)}
+                  onClick={() => setAiFor(b.key)}
                   className="flex items-center gap-1 rounded-lg bg-gradient-to-r from-teal to-sand px-3 py-1.5 text-[12px] font-bold text-white"
                 >
-                  <Sparkles className="h-3.5 w-3.5" /> AI điền từ hợp đồng / ảnh
+                  <Sparkles className="h-3.5 w-3.5" /> AI điền
                 </button>
                 <button
-                  onClick={() =>
-                    setOpenSettings((prev) => {
-                      const n = new Set(prev);
-                      if (n.has(p.id)) n.delete(p.id);
-                      else n.add(p.id);
-                      return n;
-                    })
-                  }
+                  onClick={() => toggleOpen(b.key)}
                   className="flex items-center gap-1 rounded-lg border border-border bg-white px-3 py-1.5 text-[12px] font-bold text-ink"
                 >
-                  Mùa, phụ thu, hợp đồng <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", settingsOpen && "rotate-180")} />
+                  Thông tin · giai đoạn · phụ thu <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", isOpen && "rotate-180")} />
                 </button>
+                {!b.id && (
+                  <button
+                    onClick={() => setBlocks((prev) => prev.filter((x) => x.key !== b.key))}
+                    className="rounded-lg p-1.5 text-ink-muted hover:bg-hot-light hover:text-hot"
+                    aria-label="Bỏ resort mới"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
               </div>
 
-              {settingsOpen && (
-                <div className="grid gap-3 border-b border-border bg-paper/60 p-3 lg:grid-cols-2">
-                  <div className="space-y-3">
-                    <label className="block text-[12px] font-bold text-ink-muted">
-                      Mùa cao điểm (nhiều khoảng cách nhau dấu ;)
-                      <input
-                        value={s.seasons}
-                        onChange={(e) => upd(p.id, (x) => ({ ...x, seasons: e.target.value }))}
-                        placeholder="01/06-31/08; 20/12-05/01"
-                        className="mt-1 h-9 w-full rounded-lg border border-border bg-white px-2.5 text-[13px] font-medium text-ink"
+              {isOpen && (
+                <div className="grid gap-4 border-b border-border bg-paper/60 p-3 lg:grid-cols-2">
+                  {/* Cột trái: thông tin + tiện ích */}
+                  <div className="space-y-2.5">
+                    <p className="text-[12px] font-extrabold uppercase tracking-wide text-teal-dark">Thông tin & tiện ích</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Field label="Tên *" span>
+                        <input value={b.info.product_name} onChange={(e) => upd(b.key, (x) => ({ ...x, info: { ...x.info, product_name: e.target.value } }))} className={inp} />
+                      </Field>
+                      <Field label="Loại">
+                        <select value={b.info.type} onChange={(e) => upd(b.key, (x) => ({ ...x, info: { ...x.info, type: e.target.value as ResortType } }))} className={inp}>
+                          <option value="resort">Resort</option>
+                          <option value="hotel">Khách sạn</option>
+                          <option value="homestay">Homestay</option>
+                        </select>
+                      </Field>
+                      <Field label="Hạng sao">
+                        <select
+                          value={b.info.star ?? ""}
+                          onChange={(e) => upd(b.key, (x) => ({ ...x, info: { ...x.info, star: e.target.value ? Number(e.target.value) : null } }))}
+                          className={inp}
+                        >
+                          <option value="">—</option>
+                          {[2, 3, 4, 5].map((s) => (
+                            <option key={s} value={s}>
+                              {s} sao
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                      <Field label="Khu vực * (VD Hội An)">
+                        <input value={b.info.area} onChange={(e) => upd(b.key, (x) => ({ ...x, info: { ...x.info, area: e.target.value } }))} className={inp} />
+                      </Field>
+                      <Field label="Mã (để trống = tự tạo)">
+                        <input value={b.info.product_code} onChange={(e) => upd(b.key, (x) => ({ ...x, info: { ...x.info, product_code: e.target.value } }))} className={inp} />
+                      </Field>
+                      <Field label="Địa chỉ" span>
+                        <input value={b.info.address} onChange={(e) => upd(b.key, (x) => ({ ...x, info: { ...x.info, address: e.target.value } }))} className={inp} />
+                      </Field>
+                      <Field label="Link album ảnh gốc (Sale xem)" span>
+                        <input value={b.info.image_link} onChange={(e) => upd(b.key, (x) => ({ ...x, info: { ...x.info, image_link: e.target.value } }))} className={inp} />
+                      </Field>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {AMENITIES.map((a) => {
+                        const on = !!b.info.amenities[a.k];
+                        return (
+                          <button
+                            key={a.k}
+                            type="button"
+                            onClick={() => upd(b.key, (x) => ({ ...x, info: { ...x.info, amenities: { ...x.info.amenities, [a.k]: !on } } }))}
+                            className={cn("rounded-full px-3 py-1 text-[12px] font-semibold", on ? "bg-teal text-white" : "border border-border bg-white text-ink-muted")}
+                          >
+                            {on ? "✓ " : ""}
+                            {a.l}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <Field label="Quyền lợi / tiện ích bao gồm (gửi khách được)">
+                      <textarea
+                        value={b.info.perks}
+                        onChange={(e) => upd(b.key, (x) => ({ ...x, info: { ...x.info, perks: e.target.value } }))}
+                        rows={4}
+                        placeholder={"✅ Ăn sáng buffet\n✅ Xe đưa đón phố cổ\n✅ Wifi, gym, hồ bơi vô cực"}
+                        className={cn(inp, "h-auto py-2")}
                       />
-                    </label>
+                    </Field>
+                  </div>
+
+                  {/* Cột phải: giai đoạn + phụ thu + hợp đồng */}
+                  <div className="space-y-2.5">
+                    <p className="text-[12px] font-extrabold uppercase tracking-wide text-teal-dark">Giai đoạn giá</p>
+                    <div className="space-y-1.5">
+                      {b.periods.map((p, pi) => (
+                        <div key={p.key} className="rounded-xl border border-border bg-white p-2">
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              value={p.name}
+                              onChange={(e) => upd(b.key, (x) => ({ ...x, periods: x.periods.map((y) => (y.key === p.key ? { ...y, name: e.target.value } : y)) }))}
+                              className={cn(inp, "h-8 w-36 font-bold")}
+                            />
+                            <input
+                              value={p.rangesText}
+                              disabled={p.holiday}
+                              onChange={(e) => upd(b.key, (x) => ({ ...x, periods: x.periods.map((y) => (y.key === p.key ? { ...y, rangesText: e.target.value } : y)) }))}
+                              placeholder={pi === 0 ? "Để trống = mọi ngày còn lại" : "02/01/2026-31/05/2026; 03/09/2026-23/12/2026"}
+                              className={cn(inp, "h-8 flex-1 disabled:bg-paper-dim")}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => upd(b.key, (x) => ({ ...x, periods: x.periods.filter((y) => y.key !== p.key) }))}
+                              disabled={b.periods.length <= 1}
+                              className="rounded p-1 text-ink-muted hover:text-hot disabled:opacity-30"
+                              aria-label="Xoá giai đoạn"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                          <div className="mt-1 flex gap-3 text-[11.5px] text-ink-muted">
+                            <label className="flex items-center gap-1">
+                              <input
+                                type="checkbox"
+                                checked={p.weekendSplit}
+                                onChange={(e) =>
+                                  upd(b.key, (x) => ({ ...x, periods: x.periods.map((y) => (y.key === p.key ? { ...y, weekendSplit: e.target.checked } : y)) }))
+                                }
+                                className="accent-[#EF4F58]"
+                              />
+                              Có giá cuối tuần riêng
+                            </label>
+                            <label className="flex items-center gap-1">
+                              <input
+                                type="checkbox"
+                                checked={p.holiday}
+                                onChange={(e) =>
+                                  upd(b.key, (x) => ({ ...x, periods: x.periods.map((y) => (y.key === p.key ? { ...y, holiday: e.target.checked } : y)) }))
+                                }
+                                className="accent-[#EF4F58]"
+                              />
+                              Áp cho ngày lễ (lịch chung)
+                            </label>
+                          </div>
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          upd(b.key, (x) => ({
+                            ...x,
+                            periods: [...x.periods, { key: nk("p"), name: `Giai đoạn ${x.periods.length + 1}`, rangesText: "", weekendSplit: false, holiday: false }],
+                          }))
+                        }
+                        className="flex items-center gap-1 rounded-lg border border-dashed border-border px-3 py-1.5 text-[12px] font-bold text-ink-muted hover:bg-paper-dim"
+                      >
+                        <Plus className="h-3.5 w-3.5" /> Thêm giai đoạn (cao điểm, đỉnh điểm, lễ Tết…)
+                      </button>
+                      <p className="text-[11px] text-ink-muted">
+                        Ngày trùng nhiều giai đoạn → lấy giai đoạn ở DƯỚI. Ngày không thuộc giai đoạn nào → dùng giai đoạn đầu tiên.
+                      </p>
+                    </div>
                     <div>
                       <p className="text-[12px] font-bold text-ink-muted">Đêm tính giá cuối tuần</p>
                       <div className="mt-1 flex flex-wrap gap-1">
                         {DAYS.map(({ d, l }) => {
-                          const on = s.weekend.includes(d);
+                          const on = b.weekend.includes(d);
                           return (
                             <button
                               key={d}
                               type="button"
-                              onClick={() => upd(p.id, (x) => ({ ...x, weekend: on ? x.weekend.filter((y) => y !== d) : [...x.weekend, d] }))}
-                              className={cn("h-8 w-10 rounded-lg text-[12px] font-bold", on ? "bg-teal text-white" : "border border-border bg-white text-ink-muted")}
+                              onClick={() => upd(b.key, (x) => ({ ...x, weekend: on ? x.weekend.filter((y) => y !== d) : [...x.weekend, d] }))}
+                              className={cn("h-7 w-9 rounded-lg text-[11.5px] font-bold", on ? "bg-teal text-white" : "border border-border bg-white text-ink-muted")}
                             >
                               {l}
                             </button>
                           );
                         })}
                       </div>
-                      <p className="mt-1 text-[11px] text-ink-muted">Ngày lễ/Tết lấy theo lịch ngày lễ chung của app.</p>
                     </div>
-                    <label className="block text-[12px] font-bold text-ink-muted">
-                      Phụ thu (Sale xem)
+                    <Field label="Phụ thu (Sale xem)">
+                      <textarea value={b.surcharge} onChange={(e) => upd(b.key, (x) => ({ ...x, surcharge: e.target.value }))} rows={3} className={cn(inp, "h-auto py-2")} />
+                    </Field>
+                    <Field label="Tóm tắt hợp đồng (CHỈ Sale xem)">
                       <textarea
-                        value={s.surcharge}
-                        onChange={(e) => upd(p.id, (x) => ({ ...x, surcharge: e.target.value }))}
-                        rows={4}
-                        placeholder={"👤 Người lớn thêm 650k/đêm (gồm ăn sáng)\n🧒 Trẻ 6–11t 350k\n👶 Dưới 6t miễn phí"}
-                        className="mt-1 w-full rounded-lg border border-border bg-white p-2.5 text-[13px] font-medium text-ink"
+                        value={b.contract}
+                        onChange={(e) => upd(b.key, (x) => ({ ...x, contract: e.target.value }))}
+                        rows={5}
+                        className={cn(inp, "h-auto border-dashed border-amber-300 bg-amber-50/60 py-2")}
                       />
-                    </label>
+                    </Field>
                   </div>
-                  <label className="block text-[12px] font-bold text-ink-muted">
-                    Tóm tắt hợp đồng (CHỈ Sale xem)
-                    <textarea
-                      value={s.contract}
-                      onChange={(e) => upd(p.id, (x) => ({ ...x, contract: e.target.value }))}
-                      rows={10}
-                      placeholder={"🕑 Nhận 14h · Trả 12h\n🧾 Cọc 50%\n↩️ Huỷ trước 7 ngày hoàn 100%"}
-                      className="mt-1 w-full rounded-lg border border-dashed border-amber-300 bg-amber-50/60 p-2.5 text-[13px] font-medium text-ink"
-                    />
-                  </label>
                 </div>
               )}
 
+              {/* Bảng hạng phòng × giai đoạn */}
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[1080px] border-collapse text-[12.5px]">
+                <table className="w-full border-collapse text-[12.5px]" style={{ minWidth: 640 + cols.length * 110 }}>
                   <thead>
                     <tr className="bg-paper-dim/70 text-[10.5px] font-bold uppercase text-ink-muted">
                       <th className="px-2 py-1.5 text-left">Hạng phòng</th>
-                      <th className="w-14 px-1 text-right">m²</th>
-                      <th className="w-32 px-1 text-left">Giường</th>
-                      <th className="w-14 px-1 text-right">Khách</th>
-                      <th className="w-14 px-1 text-center">Ăn sáng</th>
-                      {PRICE_COLS.map((c) => (
-                        <th key={c.k} className="w-[104px] px-1 text-right leading-tight">
+                      <th className="w-12 px-1 text-right">m²</th>
+                      <th className="w-28 px-1 text-left">Giường</th>
+                      <th className="w-12 px-1 text-right">NL</th>
+                      <th className="w-12 px-1 text-right">TE</th>
+                      <th className="w-12 px-1 text-center">Ăn sáng</th>
+                      {cols.map((c) => (
+                        <th key={`${c.p.key}-${c.we}`} className="w-[110px] px-1 text-right leading-tight">
                           {c.label}
-                          {c.sub && (
-                            <>
-                              <br />
-                              {c.sub}
-                            </>
-                          )}
+                          {c.sub && <span className="block font-medium normal-case">{c.sub}</span>}
                         </th>
                       ))}
-                      <th className="w-14 px-1 text-right">CK %</th>
+                      <th className="w-24 px-1 text-right">Giường phụ</th>
+                      <th className="w-12 px-1 text-right">CK %</th>
                       <th className="w-8" />
                     </tr>
                   </thead>
                   <tbody>
-                    {s.rooms.map((r) => (
+                    {b.rooms.map((r) => (
                       <tr key={r.key} className="border-t border-border">
                         <td className="px-1">
                           <input
                             value={r.room_type}
-                            onChange={(e) => updRoom(p.id, r.key, { room_type: e.target.value })}
+                            onChange={(e) => updRoom(b.key, r.key, { room_type: e.target.value })}
                             placeholder="Tên hạng phòng"
                             className="h-9 w-full bg-transparent px-1.5 font-semibold outline-none focus:bg-teal-light"
                           />
                         </td>
                         <td>
-                          <NumCell value={r.area_m2} col={`${p.id}-m2`} onChange={(v) => updRoom(p.id, r.key, { area_m2: v })} />
+                          <NumCell value={r.area_m2} col={`${b.key}-m2`} onChange={(v) => updRoom(b.key, r.key, { area_m2: v })} />
                         </td>
                         <td>
                           <input
                             value={r.bed}
-                            onChange={(e) => updRoom(p.id, r.key, { bed: e.target.value })}
+                            onChange={(e) => updRoom(b.key, r.key, { bed: e.target.value })}
                             placeholder="1 đôi / 2 đơn"
                             className="h-9 w-full bg-transparent px-1.5 outline-none focus:bg-teal-light"
                           />
                         </td>
                         <td>
-                          <NumCell value={r.capacity} col={`${p.id}-cap`} onChange={(v) => updRoom(p.id, r.key, { capacity: v })} />
+                          <NumCell value={r.capacity} col={`${b.key}-nl`} onChange={(v) => updRoom(b.key, r.key, { capacity: v })} />
+                        </td>
+                        <td>
+                          <NumCell value={r.max_children} col={`${b.key}-te`} onChange={(v) => updRoom(b.key, r.key, { max_children: v })} />
                         </td>
                         <td className="text-center">
                           <input
                             type="checkbox"
                             checked={r.breakfast}
-                            onChange={(e) => updRoom(p.id, r.key, { breakfast: e.target.checked })}
+                            onChange={(e) => updRoom(b.key, r.key, { breakfast: e.target.checked })}
                             className="h-4 w-4 accent-[#EF4F58]"
                           />
                         </td>
-                        {PRICE_COLS.map((c) => (
-                          <td key={c.k}>
+                        {cols.map((c) => (
+                          <td key={`${c.p.key}-${c.we}`}>
                             <NumCell
-                              value={r[c.k] as number | null}
-                              col={`${p.id}-${c.k}`}
+                              value={(c.we ? r.prices[c.p.key]?.we : r.prices[c.p.key]?.wd) ?? null}
+                              col={`${b.key}-${c.p.key}-${c.we}`}
                               placeholder="—"
-                              onChange={(v) => updRoom(p.id, r.key, { [c.k]: money(v) } as Partial<Room>)}
+                              onChange={(v) =>
+                                updRoom(b.key, r.key, {
+                                  prices: {
+                                    ...r.prices,
+                                    [c.p.key]: { wd: r.prices[c.p.key]?.wd ?? null, we: r.prices[c.p.key]?.we ?? null, [c.we ? "we" : "wd"]: money(v) },
+                                  },
+                                })
+                              }
                             />
                           </td>
                         ))}
                         <td>
-                          <NumCell value={r.discount_percent} col={`${p.id}-ck`} suffix="%" onChange={(v) => updRoom(p.id, r.key, { discount_percent: v })} />
+                          <NumCell value={r.extra_bed_price} col={`${b.key}-eb`} placeholder="—" onChange={(v) => updRoom(b.key, r.key, { extra_bed_price: money(v) })} />
+                        </td>
+                        <td>
+                          <NumCell value={r.discount_percent} col={`${b.key}-ck`} suffix="%" onChange={(v) => updRoom(b.key, r.key, { discount_percent: v })} />
                         </td>
                         <td className="text-center">
                           <button
                             type="button"
                             onClick={() =>
-                              upd(p.id, (x) => ({
-                                ...x,
-                                rooms: x.rooms.filter((y) => y.key !== r.key),
-                                deleted: r.id ? [...x.deleted, r.id] : x.deleted,
-                              }))
+                              upd(b.key, (x) => ({ ...x, rooms: x.rooms.filter((y) => y.key !== r.key), deleted: r.id ? [...x.deleted, r.id] : x.deleted }))
                             }
                             className="rounded p-1 text-ink-muted hover:bg-hot-light hover:text-hot"
                             aria-label="Xoá hạng phòng"
@@ -371,93 +641,52 @@ export function ResortPricingSheet({ resorts, rates }: { resorts: ResortRow[]; r
                   </tbody>
                 </table>
               </div>
-              <button
-                type="button"
-                onClick={() =>
-                  upd(p.id, (x) => ({
-                    ...x,
-                    rooms: [
-                      ...x.rooms,
-                      {
-                        key: newKey(),
-                        room_type: "",
-                        area_m2: null,
-                        bed: "",
-                        capacity: 2,
-                        breakfast: true,
-                        discount_percent: null,
-                        price_low_weekday: null,
-                        price_low_weekend: null,
-                        price_high_weekday: null,
-                        price_high_weekend: null,
-                        price_holiday: null,
-                      },
-                    ],
-                  }))
-                }
-                className="m-2 flex items-center gap-1 rounded-lg border border-dashed border-border px-3 py-1.5 text-[12px] font-bold text-ink-muted hover:bg-paper-dim"
-              >
-                <Plus className="h-3.5 w-3.5" /> Thêm hạng phòng
-              </button>
+              <div className="flex items-center gap-3 p-2">
+                <button
+                  type="button"
+                  onClick={() => upd(b.key, (x) => ({ ...x, rooms: [...x.rooms, emptyRoom()] }))}
+                  className="flex items-center gap-1 rounded-lg border border-dashed border-border px-3 py-1.5 text-[12px] font-bold text-ink-muted hover:bg-paper-dim"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Thêm hạng phòng
+                </button>
+                <span className="text-[11px] text-ink-muted">Gõ “1700” = 1.700.000đ · NL = người lớn, TE = trẻ em tối đa/phòng</span>
+              </div>
             </div>
           );
         })}
-        {!visible.length && <p className="py-10 text-center text-sm text-ink-muted">Không có resort / khách sạn nào khớp.</p>}
+        {!visible.length && <p className="py-10 text-center text-sm text-ink-muted">Chưa có resort / khách sạn nào khớp.</p>}
       </div>
 
       {aiFor && (
         <AIImportDialog
-          resort={aiFor}
+          title={aiFor === "new" ? "Thêm resort / khách sạn / homestay mới bằng AI" : `AI điền · ${blocks.find((b) => b.key === aiFor)?.info.product_name}`}
           onClose={() => setAiFor(null)}
           onResult={(res) => {
-            upd(aiFor.id, (x) => {
-              const byName = new Map(x.rooms.map((r) => [plain(r.room_type), r]));
-              const rooms: Room[] = res.rooms.map((ai) => {
-                const old = byName.get(plain(ai.room_type));
-                if (old) byName.delete(plain(ai.room_type));
-                return {
-                  key: old?.key ?? newKey(),
-                  id: old?.id,
-                  room_type: ai.room_type,
-                  area_m2: ai.area_m2 ?? old?.area_m2 ?? null,
-                  bed: ai.bed ?? old?.bed ?? "",
-                  capacity: ai.capacity ?? old?.capacity ?? null,
-                  breakfast: ai.breakfast,
-                  discount_percent: old?.discount_percent ?? null,
-                  price_low_weekday: ai.price_low_weekday,
-                  price_low_weekend: ai.price_low_weekend,
-                  price_high_weekday: ai.price_high_weekday,
-                  price_high_weekend: ai.price_high_weekend,
-                  price_holiday: ai.price_holiday,
-                };
-              });
-              // Hạng phòng cũ không có trong tài liệu: giữ lại ở cuối để Admin tự quyết
-              return {
-                ...x,
-                rooms: [...rooms, ...byName.values()],
-                seasons: res.high_seasons || x.seasons,
-                weekend: res.weekend_nights?.length ? res.weekend_nights : x.weekend,
-                surcharge: res.surcharge_note || x.surcharge,
-                contract: res.contract_summary || x.contract,
-              };
-            });
-            setOpenSettings((prev) => new Set(prev).add(aiFor.id));
-            toast.success(`AI đã điền ${res.rooms.length} hạng phòng — kiểm tra lại các ô rồi bấm Lưu.`);
+            if (aiFor === "new") {
+              const b = applyAI(emptyBlock(), res);
+              setBlocks((prev) => [b, ...prev]);
+              setOpen((prev) => new Set(prev).add(b.key));
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            } else {
+              upd(aiFor, (b) => applyAI(b, res));
+              setOpen((prev) => new Set(prev).add(aiFor));
+            }
+            toast.success(`AI đã điền ${res.periods.length} giai đoạn, ${res.rooms.length} hạng phòng — kiểm tra lại rồi bấm Lưu.`);
             setAiFor(null);
           }}
         />
       )}
 
       <BulkSaveBar
-        show={dirtyIds.length > 0}
+        show={dirty.length > 0}
         message={
           <>
-            Đã sửa <b className="text-sand-dark">{dirtyIds.length} resort</b> — chưa lưu
+            Có <b className="text-sand-dark">{dirty.length} nơi</b> thay đổi — chưa lưu
           </>
         }
         onSave={saveAll}
         onUndo={() => {
-          setState(Object.fromEntries(resorts.map((p) => [p.id, initState(p, rates)])));
+          setBlocks(resorts.map((p) => fromProduct(p, rates)));
           toast.success("Đã hoàn tác mọi thay đổi chưa lưu.");
         }}
         saving={saving}
@@ -466,39 +695,76 @@ export function ResortPricingSheet({ resorts, rates }: { resorts: ResortRow[]; r
   );
 }
 
-interface AIRoom {
-  room_type: string;
-  area_m2: number | null;
-  bed: string | null;
-  capacity: number | null;
-  breakfast: boolean;
-  price_low_weekday: number | null;
-  price_low_weekend: number | null;
-  price_high_weekday: number | null;
-  price_high_weekend: number | null;
-  price_holiday: number | null;
+const inp = "h-9 w-full rounded-lg border border-border bg-white px-2.5 text-[13px] font-medium text-ink outline-none focus:border-teal";
+function Field({ label, span, children }: { label: string; span?: boolean; children: React.ReactNode }) {
+  return (
+    <label className={cn("block text-[11.5px] font-bold text-ink-muted", span && "col-span-2")}>
+      {label}
+      <div className="mt-0.5">{children}</div>
+    </label>
+  );
 }
+
 interface AIRes {
-  rooms: AIRoom[];
-  high_seasons: string;
+  resort: {
+    name: string;
+    type: string;
+    star: number | null;
+    area: string;
+    address: string;
+    image_link: string;
+    perks: string;
+    amenities: Record<string, boolean>;
+  };
+  periods: { key: string; name: string; ranges: { from: string; to: string }[]; weekend_split: boolean; holiday: boolean }[];
   weekend_nights: number[];
+  rooms: {
+    room_type: string;
+    area_m2: number | null;
+    bed: string | null;
+    capacity: number | null;
+    max_children: number | null;
+    breakfast: boolean;
+    extra_bed_price: number | null;
+    prices: Record<string, { wd: number | null; we: number | null }>;
+  }[];
   surcharge_note: string;
   contract_summary: string;
 }
 
-function AIImportDialog({ resort, onClose, onResult }: { resort: ResortRow; onClose: () => void; onResult: (r: AIRes) => void }) {
+async function toB64(file: File): Promise<{ url: string; mime: string; data: string }> {
+  const small = await compressImage(file);
+  const buf = new Uint8Array(await small.arrayBuffer());
+  let bin = "";
+  for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+  return { url: URL.createObjectURL(small), mime: small.type || "image/jpeg", data: btoa(bin) };
+}
+
+function AIImportDialog({ title, onClose, onResult }: { title: string; onClose: () => void; onResult: (r: AIRes) => void }) {
   const [text, setText] = useState("");
-  const [img, setImg] = useState<{ url: string; mime: string; data: string } | null>(null);
+  const [imgs, setImgs] = useState<{ url: string; mime: string; data: string }[]>([]);
   const [busy, setBusy] = useState(false);
 
-  async function pickImage(file: File | undefined) {
-    if (!file) return;
-    const small = await compressImage(file);
-    const buf = await small.arrayBuffer();
-    let bin = "";
-    new Uint8Array(buf).forEach((b) => (bin += String.fromCharCode(b)));
-    setImg({ url: URL.createObjectURL(small), mime: small.type || "image/jpeg", data: btoa(bin) });
+  async function addFiles(files: File[]) {
+    const list = files.filter((f) => f.type.startsWith("image/")).slice(0, 6 - imgs.length);
+    if (!list.length) return;
+    const out = await Promise.all(list.map(toB64));
+    setImgs((prev) => [...prev, ...out].slice(0, 6));
   }
+
+  // Ctrl+V ảnh chụp màn hình thẳng vào hộp thoại
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const files = Array.from(e.clipboardData?.files ?? []);
+      if (files.some((f) => f.type.startsWith("image/"))) {
+        e.preventDefault();
+        addFiles(files);
+      }
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [imgs.length]);
 
   async function run() {
     setBusy(true);
@@ -506,7 +772,7 @@ function AIImportDialog({ resort, onClose, onResult }: { resort: ResortRow; onCl
       const res = await fetch("/api/admin/resort-ai-import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, image: img ? { mime: img.mime, data: img.data } : undefined }),
+        body: JSON.stringify({ text, images: imgs.map(({ mime, data }) => ({ mime, data })) }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "AI chưa đọc được");
@@ -522,39 +788,58 @@ function AIImportDialog({ resort, onClose, onResult }: { resort: ResortRow; onCl
   return (
     <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/50 sm:items-center" onClick={onClose}>
       <div className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-t-2xl bg-white p-4 sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-2 flex items-center justify-between">
-          <p className="font-display text-[17px] font-bold text-ink">AI điền bảng giá · {resort.product_name}</p>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <p className="font-display text-[17px] font-bold text-ink">{title}</p>
           <button onClick={onClose} className="rounded-full p-1.5 hover:bg-paper-dim" aria-label="Đóng">
             <X className="h-5 w-5" />
           </button>
         </div>
-        <p className="mb-3 text-[12.5px] text-ink-muted">
-          Dán chữ hợp đồng / bảng giá <b>hoặc</b> chọn ảnh chụp màn hình. AI tự điền hạng phòng, 5 mức giá, mùa cao điểm, phụ thu và tóm tắt hợp đồng. Bạn xem lại rồi mới Lưu.
+        <p className="mb-3 text-[12.5px] leading-relaxed text-ink-muted">
+          Dán <b>chữ</b> hợp đồng / bảng giá, hoặc <b>Ctrl+V ảnh chụp màn hình</b> (tối đa 6 ảnh), hoặc chọn ảnh. AI tự điền: tên, hạng sao, khu vực, tiện ích,
+          <b> các giai đoạn & khoảng ngày</b>, hạng phòng + giá từng giai đoạn, giường phụ, phụ thu, tóm tắt hợp đồng. Bạn xem lại rồi mới Lưu.
         </p>
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
-          rows={8}
-          placeholder="Dán nội dung hợp đồng / bảng giá vào đây…"
+          rows={7}
+          placeholder="Dán nội dung hợp đồng / bảng giá vào đây (copy từ Excel, Word, Zalo đều được)…"
           className="w-full rounded-xl border border-border p-3 text-[13px] outline-none focus:border-teal"
         />
-        <label className="mt-2 flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border p-3 text-[13px] font-semibold text-ink-muted hover:bg-paper-dim">
-          <ImagePlus className="h-4 w-4" />
-          {img ? "Đổi ảnh khác" : "Chọn ảnh chụp bảng giá / hợp đồng"}
-          <input type="file" accept="image/*" className="hidden" onChange={(e) => pickImage(e.target.files?.[0])} />
-        </label>
-        {img && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={img.url} alt="" className="mt-2 max-h-56 w-full rounded-xl object-contain" />
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border p-3 text-[12.5px] font-semibold text-ink-muted hover:bg-paper-dim">
+            <ImagePlus className="h-4 w-4" /> Chọn ảnh
+            <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => addFiles(Array.from(e.target.files ?? []))} />
+          </label>
+          <div className="flex items-center justify-center gap-2 rounded-xl bg-paper-dim p-3 text-[12px] font-semibold text-ink-muted">
+            <ClipboardPaste className="h-4 w-4" /> Hoặc Ctrl+V ảnh
+          </div>
+        </div>
+        {imgs.length > 0 && (
+          <div className="mt-2 grid grid-cols-3 gap-2">
+            {imgs.map((im, i) => (
+              <div key={im.url} className="relative">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={im.url} alt="" className="h-24 w-full rounded-lg border border-border object-cover" />
+                <button
+                  onClick={() => setImgs((prev) => prev.filter((_, j) => j !== i))}
+                  className="absolute right-1 top-1 rounded-full bg-black/60 p-0.5 text-white"
+                  aria-label="Bỏ ảnh"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
         )}
         <button
           onClick={run}
-          disabled={busy || (!text.trim() && !img)}
+          disabled={busy || (!text.trim() && !imgs.length)}
           className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-teal to-sand text-[14px] font-bold text-white disabled:opacity-50"
         >
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-          {busy ? "AI đang đọc… (10–30 giây)" : "Đọc và điền bảng giá"}
+          {busy ? "AI đang đọc… (15–40 giây)" : "Đọc và điền"}
         </button>
+        <p className="mt-2 text-center text-[11px] text-ink-muted">Cần cài GEMINI_API_KEY trên Vercel.</p>
       </div>
     </div>
   );

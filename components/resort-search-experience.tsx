@@ -25,6 +25,7 @@ export function ResortSearchExperience({ areas }: { areas: string[] }) {
   const [checkout, setCheckout] = useState("");
   const [guests, setGuests] = useState("");
   const [budget, setBudget] = useState("");
+  const [star, setStar] = useState(0);
   const [showFilters, setShowFilters] = useState(false);
 
   const [data, setData] = useState<ResortSearchResponse | null>(null);
@@ -42,6 +43,7 @@ export function ResortSearchExperience({ areas }: { areas: string[] }) {
         ...(checkout ? { checkout } : {}),
         ...(guests ? { guests: Number(guests) } : {}),
         ...(budget ? { budget: Number(budget.replace(/\D/g, "")) } : {}),
+        ...(star ? { star } : {}),
       };
       try {
         const res = await fetch("/api/search-resort", {
@@ -56,7 +58,7 @@ export function ResortSearchExperience({ areas }: { areas: string[] }) {
         opts.append ? setLoadingMore(false) : setLoading(false);
       }
     },
-    [query, typeChip, area, checkin, checkout, guests, budget, results.length]
+    [query, typeChip, area, checkin, checkout, guests, budget, star, results.length]
   );
 
   // Mở trang là hiện luôn danh sách (rẻ → đắt), không phải gõ mới thấy
@@ -115,13 +117,26 @@ export function ResortSearchExperience({ areas }: { areas: string[] }) {
       {showFilters && (
       <div className="space-y-2.5 rounded-2xl border border-border bg-white p-3">
       <div className="flex flex-wrap gap-1.5">
-        {(["", "resort", "hotel"] as const).map((t) => (
+        {(["", "resort", "hotel", "homestay"] as const).map((t) => (
           <button
             key={t || "all"}
             onClick={() => setTypeChip(t)}
             className={`rounded-xl px-4 py-2 text-[13px] font-semibold ${typeChip === t ? "bg-teal text-white" : "border border-border bg-white text-ink-muted"}`}
           >
-            {t === "" ? "Tất cả" : t === "resort" ? "Resort" : "Khách sạn"}
+            {t === "" ? "Tất cả" : t === "resort" ? "Resort" : t === "hotel" ? "Khách sạn" : "Homestay"}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="text-[12px] font-bold text-ink-muted">Hạng sao:</span>
+        {[0, 3, 4, 5].map((s) => (
+          <button
+            key={s}
+            onClick={() => setStar(s)}
+            className={`rounded-full px-3 py-1.5 text-[12px] font-bold ${star === s ? "bg-amber-500 text-white" : "border border-amber-200 bg-amber-50 text-amber-800"}`}
+          >
+            {s === 0 ? "Tất cả" : `${s}★ trở lên`}
           </button>
         ))}
       </div>
@@ -152,10 +167,11 @@ export function ResortSearchExperience({ areas }: { areas: string[] }) {
       </div>
       )}
 
-      {pf && (pf.area || pf.date || pf.guests || pf.budget) && (
+      {pf && (pf.area || pf.date || pf.guests || pf.budget || pf.star) && (
         <div className="flex flex-wrap gap-1.5 text-[12px]">
           <span className="font-semibold text-ink-muted">App hiểu:</span>
           {pf.area && <span className="rounded-full bg-teal-light px-2.5 py-1 font-semibold text-teal-dark">📍 {pf.area}</span>}
+          {pf.star && <span className="rounded-full bg-amber-50 px-2.5 py-1 font-semibold text-amber-800">{pf.star}★ trở lên</span>}
           {pf.guests && <span className="rounded-full bg-teal-light px-2.5 py-1 font-semibold text-teal-dark">👥 {pf.guests} người/phòng</span>}
           {pf.budget && (
             <span className="rounded-full bg-teal-light px-2.5 py-1 font-semibold text-teal-dark">
