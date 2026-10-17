@@ -63,6 +63,7 @@ interface Block {
     address: string;
     star: number | null;
     image_link: string;
+    price_source: string;
     perks: string;
     amenities: Record<string, boolean>;
   };
@@ -104,6 +105,7 @@ function fromProduct(p: Product, rates: HotelRate[]): Block {
       address: p.address ?? "",
       star: p.star ?? null,
       image_link: p.image_link ?? "",
+      price_source: p.price_source ?? "",
       perks: p.perks ?? "",
       amenities: Object.fromEntries(AMENITIES.map((a) => [a.k, !!p[a.k]])),
     },
@@ -130,7 +132,7 @@ function fromProduct(p: Product, rates: HotelRate[]): Block {
 function emptyBlock(type: ResortType = "resort"): Block {
   return {
     key: nk("new"),
-    info: { product_code: "", product_name: "", type, area: "", address: "", star: null, image_link: "", perks: "", amenities: {} },
+    info: { product_code: "", product_name: "", type, area: "", address: "", star: null, image_link: "", price_source: "", perks: "", amenities: {} },
     periods: [{ key: "p1", name: "Giá chung", rangesText: "", weekendSplit: false, holiday: false }],
     weekend: [5, 6],
     surcharge: "",
@@ -418,6 +420,9 @@ export function ResortPricingSheet({
                       </Field>
                       <Field label="Địa chỉ" span>
                         <input value={b.info.address} onChange={(e) => upd(b.key, (x) => ({ ...x, info: { ...x.info, address: e.target.value } }))} className={inp} />
+                      </Field>
+                      <Field label="Giá mua của (nguồn / NCC — chỉ Sale xem)" span>
+                        <input value={b.info.price_source} placeholder="VD: Mustgo · 092 5959 777" onChange={(e) => upd(b.key, (x) => ({ ...x, info: { ...x.info, price_source: e.target.value } }))} className={inp} />
                       </Field>
                       <Field label="Link album ảnh gốc (Sale xem)" span>
                         <input value={b.info.image_link} onChange={(e) => upd(b.key, (x) => ({ ...x, info: { ...x.info, image_link: e.target.value } }))} className={inp} />

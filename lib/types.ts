@@ -73,6 +73,8 @@ export interface Product {
   rate_periods?: RatePeriod[] | null;
   star?: number | null;
   perks?: string | null;
+  /** Giá mua của ai (nhà cung cấp / nguồn giá) — chỉ Sale xem */
+  price_source?: string | null;
   image_link?: string | null;
 }
 

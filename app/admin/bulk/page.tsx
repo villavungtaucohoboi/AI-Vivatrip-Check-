@@ -69,6 +69,14 @@ export default function BulkHubPage() {
               >
                 Thêm hàng loạt
               </Link>
+              {key === "resort" && (
+                <Link
+                  href="/admin/bulk/resort/import"
+                  className="block rounded-xl border border-teal/40 bg-teal-light/50 px-3 py-2.5 text-center text-[13px] font-bold text-teal-dark hover:bg-teal-light"
+                >
+                  Nhập file Excel bảng giá
+                </Link>
+              )}
             </div>
           </div>
         ))}

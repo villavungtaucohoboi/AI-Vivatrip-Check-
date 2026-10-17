@@ -127,6 +127,12 @@ export function ResortResultCard({
             <NoteView text={product.surcharge_note} />
           </Collapsible>
         )}
+        {product.price_source && (
+          <p className="flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-900">
+            <span className="rounded bg-amber-600 px-1.5 py-0.5 text-[9.5px] font-extrabold text-white">CHỈ SALE</span>
+            Giá mua của: <b>{product.price_source}</b>
+          </p>
+        )}
         {product.contract_summary && (
           <Collapsible icon={<FileText className="h-4 w-4 text-amber-700" />} title="Tóm tắt hợp đồng" tone="sale" badge="CHỈ SALE XEM">
             <NoteView text={product.contract_summary} />

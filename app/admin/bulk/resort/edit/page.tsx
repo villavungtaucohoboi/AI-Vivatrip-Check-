@@ -34,6 +34,9 @@ export default async function ResortBulkEditPage({ searchParams }: { searchParam
         title="Resort · Khách sạn · Homestay — Bảng giá"
         subtitle="Mỗi nơi tự khai các GIAI ĐOẠN giá (thường, cao điểm, đỉnh điểm, lễ Tết…) với khoảng ngày riêng. Dán hợp đồng / ảnh bảng giá để AI điền sẵn, xem lại rồi Lưu."
       />
+      <a href="/admin/bulk/resort/import" className="mb-3 inline-flex items-center gap-1.5 rounded-xl border border-teal/40 bg-teal-light/50 px-3 py-2 text-[13px] font-bold text-teal-dark">
+        📥 Nhập file Excel bảng giá (nhiều khách sạn 1 lần)
+      </a>
       <ResortPricingSheet resorts={(resorts ?? []) as ResortRow[]} rates={(rates ?? []) as HotelRate[]} images={images} openNew={sp.new === "1"} />
     </main>
   );

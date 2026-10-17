@@ -97,6 +97,11 @@ export function ResortGridCard({
             <MapPin className="h-3 w-3 shrink-0" />
             <span className="truncate">{p.sub_region ? `${p.sub_region}, ${p.area}` : p.area}</span>
           </p>
+          {p.price_source && (
+            <p className="truncate text-[10px] font-semibold text-amber-700 lg:text-[11px]" title="Chỉ Sale xem">
+              🏷️ Mua của {p.price_source}
+            </p>
+          )}
           {amen.length > 0 && (
             <p className="hidden gap-2 text-[11.5px] text-ink-muted lg:flex">
               {amen.map((a) => (
