@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Building2, CalendarClock, ChevronDown, Dices, Lock, PartyPopper, Plus, Search, Settings, Ship } from "lucide-react";
+import { Building2, CalendarClock, ChevronDown, Dices, Globe2, Lock, PartyPopper, Plus, Search, Settings, Ship } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useClientRole } from "@/lib/use-client-role";
 import type { UserRole } from "@/lib/types";
@@ -37,9 +37,15 @@ export function Header({ role: initialRole }: { role: UserRole }) {
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
   const moreItems: { href: string; label: string; icon: typeof Search }[] = [
+    { href: "/availability-links", label: "Link check lịch", icon: CalendarClock },
     { href: "/holiday-funds", label: "Quỹ ngày lễ", icon: PartyPopper },
     { href: "/daily-wishes", label: "Lời chúc", icon: Dices },
-    ...(role === "admin" ? [{ href: "/admin/products", label: "Quản lý sản phẩm", icon: Settings }] : []),
+    ...(role === "admin"
+      ? [
+          { href: "/admin/products", label: "Quản lý sản phẩm", icon: Settings },
+          { href: "/admin/tours", label: "Quản lý tour nước ngoài", icon: Globe2 },
+        ]
+      : []),
   ];
   const moreActive = moreItems.some((m) => isActive(m.href));
 
@@ -70,7 +76,7 @@ export function Header({ role: initialRole }: { role: UserRole }) {
           {navItem("/search", "Tìm Villa", Search)}
           {navItem("/search-resort", "Tìm Resort/Hotel", Building2)}
           {navItem("/cruises", "Du thuyền", Ship)}
-          {navItem("/availability-links", "Link check lịch", CalendarClock)}
+          {navItem("/tours", "Tour nước ngoài", Globe2)}
           <div className="relative" ref={moreRef}>
             <button
               type="button"

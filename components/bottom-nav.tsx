@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, CalendarClock, Dices, MoreHorizontal, PartyPopper, Plus, Search, Settings, Ship } from "lucide-react";
+import { Building2, CalendarClock, Dices, Globe2, MoreHorizontal, PartyPopper, Plus, Search, Settings, Ship } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useClientRole } from "@/lib/use-client-role";
 import type { UserRole } from "@/lib/types";
@@ -23,12 +23,18 @@ export function BottomNav({ role: initialRole }: { role: UserRole }) {
     { href: "/search", label: "Villa", icon: Search },
     { href: "/search-resort", label: "Resort/Hotel", icon: Building2 },
     { href: "/cruises", label: "Du thuyền", icon: Ship },
-    { href: "/availability-links", label: "Link lịch", icon: CalendarClock },
+    { href: "/tours", label: "Nước ngoài", icon: Globe2 },
   ];
   const more = [
+    { href: "/availability-links", label: "Link check lịch", icon: CalendarClock },
     { href: "/holiday-funds", label: "Quỹ ngày lễ", icon: PartyPopper },
     { href: "/daily-wishes", label: "Lời chúc", icon: Dices },
-    ...(role === "admin" ? [{ href: "/admin/products", label: "Quản lý", icon: Settings }] : []),
+    ...(role === "admin"
+      ? [
+          { href: "/admin/products", label: "Quản lý", icon: Settings },
+          { href: "/admin/tours", label: "Quản lý tour", icon: Globe2 },
+        ]
+      : []),
   ];
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
   const moreActive = more.some((m) => isActive(m.href));

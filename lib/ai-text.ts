@@ -6,8 +6,34 @@ import "server-only";
  * Không có key / lỗi / hết lượt → trả về text = null kèm lý do, để nơi gọi
  * tự dùng bản xử lý miễn phí.
  */
+// Model Gemini dùng được (dò 1 lần rồi nhớ trong lúc server còn chạy)
+let cachedGeminiModel: string | null = null;
+
+/** Hỏi Google danh sách model đang có, chọn model "Flash" mới nhất hỗ trợ generateContent. */
+async function discoverGeminiModel(key: string, skip: Set<string>): Promise<string | null> {
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?pageSize=200&key=${encodeURIComponent(key)}`);
+    if (!res.ok) return null;
+    const data = (await res.json()) as { models?: { name: string; supportedGenerationMethods?: string[] }[] };
+    const names = (data.models ?? [])
+      .filter((m) => m.supportedGenerationMethods?.includes("generateContent"))
+      .map((m) => m.name.replace(/^models\//, ""))
+      .filter((n) => /flash/i.test(n) && !/(tts|image|audio|live|embedding|thinking|exp)/i.test(n) && !skip.has(n));
+    const ver = (n: string) => parseFloat(n.match(/gemini-(\d+(?:\.\d+)?)/)?.[1] ?? "0");
+    names.sort((a, b) => {
+      // ưu tiên: bản "latest" → phiên bản cao → không phải lite → không phải preview
+      const sa = (/latest/.test(a) ? 100 : 0) + ver(a) * 10 - (/lite/.test(a) ? 1 : 0) - (/preview/.test(a) ? 2 : 0);
+      const sb = (/latest/.test(b) ? 100 : 0) + ver(b) * 10 - (/lite/.test(b) ? 1 : 0) - (/preview/.test(b) ? 2 : 0);
+      return sb - sa;
+    });
+    return names[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export interface AIImage {
-  mime: string; // image/jpeg | image/png | image/webp
+  mime: string; // image/jpeg | image/png | image/webp | application/pdf
   data: string; // base64 (không kèm "data:...;base64,")
 }
 
@@ -15,10 +41,10 @@ export async function callAI(
   prompt: string,
   raw: string,
   maxTokens = 900,
-  opts: { image?: AIImage; images?: AIImage[]; json?: boolean } = {}
+  opts: { image?: AIImage; images?: AIImage[]; json?: boolean; maxInput?: number } = {}
 ): Promise<{ text: string | null; error?: string }> {
   const content = raw.trim()
-    ? `${prompt}\n\nNỘI DUNG GỐC:\n"""\n${raw.slice(0, 20000)}\n"""`
+    ? `${prompt}\n\nNỘI DUNG GỐC:\n"""\n${raw.slice(0, opts.maxInput ?? 20000)}\n"""`
     : prompt;
   let error: string | undefined;
   const imgs = [...(opts.images ?? []), ...(opts.image ? [opts.image] : [])].slice(0, 6);
@@ -37,7 +63,11 @@ export async function callAI(
               role: "user",
               content: imgs.length
                 ? [
-                    ...imgs.map((im) => ({ type: "image", source: { type: "base64", media_type: im.mime, data: im.data } })),
+                    ...imgs.map((im) =>
+                      im.mime === "application/pdf"
+                        ? { type: "document", source: { type: "base64", media_type: im.mime, data: im.data } }
+                        : { type: "image", source: { type: "base64", media_type: im.mime, data: im.data } }
+                    ),
                     { type: "text", text: content },
                   ]
                 : content,
@@ -57,37 +87,42 @@ export async function callAI(
 
   const gemini = process.env.GEMINI_API_KEY;
   if (gemini) {
+    const body = JSON.stringify({
+      contents: [{ role: "user", parts: [...imgs.map((im) => ({ inline_data: { mime_type: im.mime, data: im.data } })), { text: content }] }],
+      generationConfig: { maxOutputTokens: maxTokens, temperature: 0.1, ...(opts.json ? { responseMimeType: "application/json" } : {}) },
+    });
     try {
-      const model = process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(gemini)}`,
-        {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            contents: [
-              {
-                role: "user",
-                parts: [...imgs.map((im) => ({ inline_data: { mime_type: im.mime, data: im.data } })), { text: content }],
-              },
-            ],
-            generationConfig: {
-              maxOutputTokens: maxTokens,
-              temperature: 0.1,
-              ...(opts.json ? { responseMimeType: "application/json" } : {}),
-            },
-          }),
+      // Thử model đã cài / đã dò được; tên model bị Google đổi (404) → tự dò model Flash đang có rồi thử lại
+      const tried = new Set<string>();
+      let model = cachedGeminiModel || process.env.GEMINI_MODEL || "gemini-flash-latest";
+      for (let attempt = 0; attempt < 3; attempt++) {
+        tried.add(model);
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(gemini)}`,
+          { method: "POST", headers: { "content-type": "application/json" }, body }
+        );
+        if (res.ok) {
+          cachedGeminiModel = model;
+          const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
+          const out = data.candidates?.[0]?.content?.parts?.map((x) => x.text ?? "").join("").trim();
+          if (out) return { text: out };
+          error = "Gemini không trả nội dung (thử lại hoặc cắt ảnh rõ hơn)";
+          break;
         }
-      );
-      if (res.ok) {
-        const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
-        const out = data.candidates?.[0]?.content?.parts?.map((x) => x.text ?? "").join("").trim();
-        if (out) return { text: out };
-        error = "Gemini không trả nội dung";
-      } else if (res.status === 429) error = "Gemini hết lượt miễn phí (thử lại sau)";
-      else if (res.status === 404) error = `Gemini không có model "${model}" — đổi biến GEMINI_MODEL`;
-      else if (res.status === 400 || res.status === 403) error = "Key Gemini không hợp lệ";
-      else error = `Gemini lỗi ${res.status}`;
+        const detail = await res.text().catch(() => "");
+        if (res.status === 404) {
+          const next = await discoverGeminiModel(gemini, tried);
+          if (next) {
+            model = next;
+            continue;
+          }
+          error = `Không tìm được model Gemini phù hợp (đã thử: ${[...tried].join(", ")})`;
+        } else if (res.status === 429) error = "Gemini hết lượt miễn phí — đợi 1 phút hoặc thử lại sau";
+        else if (res.status === 403 || /API key not valid|API_KEY_INVALID/i.test(detail)) error = "Key Gemini không hợp lệ — kiểm tra lại GEMINI_API_KEY";
+        else if (res.status === 400) error = `Gemini từ chối yêu cầu: ${(detail.match(/"message":\s*"([^"]+)/)?.[1] ?? "dữ liệu không hợp lệ").slice(0, 160)}`;
+        else error = `Gemini lỗi ${res.status}`;
+        break;
+      }
     } catch {
       error = "Không kết nối được Gemini";
     }
