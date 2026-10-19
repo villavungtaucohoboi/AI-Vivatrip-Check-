@@ -15,6 +15,8 @@ interface NameHit {
   sub_region: string | null;
   thumbnail_url: string | null;
   price_weekday: number | null;
+  /** cùng khách sạn ở nhiều đối tác (rẻ → đắt) */
+  partners?: string[];
 }
 
 /**
@@ -113,6 +115,11 @@ export function NameQuickSearch({ scope, placeholder }: { scope: "villa" | "reso
                     <MapPin className="h-3 w-3 shrink-0 text-teal" />
                     {h.sub_region ? `${h.sub_region}, ${h.area}` : h.area}
                     {scope === "resort" && <span className="ml-1 rounded bg-paper-dim px-1 text-[10px]">{PRODUCT_TYPE_LABEL[h.type]}</span>}
+                    {!!h.partners?.length && (
+                      <span className="ml-1 truncate rounded bg-amber-50 px-1 text-[10px] font-semibold text-amber-800" title={h.partners.join(" · ")}>
+                        🤝 {h.partners.length} đối tác · rẻ nhất {h.partners[0]}
+                      </span>
+                    )}
                   </p>
                 </div>
                 {h.price_weekday != null && (
