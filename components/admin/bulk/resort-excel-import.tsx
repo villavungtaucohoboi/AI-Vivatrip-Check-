@@ -1,19 +1,19 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, CheckCircle2, Download, FileSpreadsheet, Loader2, Upload, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { downloadResortTemplate, parseResortWorkbook, type ParsedHotel } from "@/lib/resort-excel";
 import { cn } from "@/lib/utils";
 
-type Status = { state: "new" | "update" | "created" | "updated" | "failed"; id?: string | null; error?: string };
+type Status = { state: "new" | "partner" | "update" | "created" | "updated" | "failed"; id?: string | null; error?: string; partnerOf?: string | null };
 const BATCH = 4;
 const k = (n: number | null) => (n == null ? "—" : `${new Intl.NumberFormat("vi-VN").format(Math.round(n / 1000))}k`);
 const d = (s: string | null) => (s ? s.split("-").reverse().join("/") : "—");
 const TYPE = { resort: "Resort", hotel: "Khách sạn", homestay: "Homestay" } as const;
 
-export function ResortExcelImport() {
+export function ResortExcelImport({ initialFile }: { initialFile?: File } = {}) {
   const [fileName, setFileName] = useState("");
   const [hotels, setHotels] = useState<ParsedHotel[]>([]);
   const [picked, setPicked] = useState<Set<string>>(new Set());
@@ -23,6 +23,10 @@ export function ResortExcelImport() {
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (initialFile) onFile(initialFile);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialFile]);
 
   async function onFile(f: File | undefined) {
     if (!f) return;
@@ -37,18 +41,34 @@ export function ResortExcelImport() {
       }
       setHotels(hs);
       setPicked(new Set(hs.filter((h) => !h.expired && h.rooms > 0).map((h) => h.resort.clientKey)));
-      // Hỏi web: khách sạn nào đã có (sẽ cập nhật)
-      const res = await fetch("/api/admin/bulk/resort-import", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dryRun: true, resorts: hs.map((h) => h.resort) }),
-      });
-      const j = await res.json();
-      if (j.matches) {
-        setStatus(Object.fromEntries(j.matches.map((m: { key: string; id: string | null }) => [m.key, { state: m.id ? "update" : "new", id: m.id }])));
-      }
+      await check(hs, source);
     } catch {
       toast.error("Không đọc được file. Hãy lưu lại dạng .xlsx rồi thử lại.");
+    }
+  }
+
+  const withSource = (h: ParsedHotel, src: string) => ({
+    ...h.resort,
+    info: { ...h.resort.info, price_source: h.resort.info.price_source || src.trim() || null },
+  });
+  // Hỏi web: khách sạn nào đã có CÙNG đối tác (cập nhật) / có ở đối tác khác (thêm đối tác) / mới
+  async function check(hs: ParsedHotel[], src: string) {
+    if (!hs.length) return;
+    const res = await fetch("/api/admin/bulk/resort-import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dryRun: true, resorts: hs.map((h) => withSource(h, src)) }),
+    });
+    const j = await res.json().catch(() => ({}));
+    if (j.matches) {
+      setStatus(
+        Object.fromEntries(
+          j.matches.map((m: { key: string; id: string | null; partnerOf: string | null }) => [
+            m.key,
+            { state: m.id ? "update" : m.partnerOf ? "partner" : "new", id: m.id, partnerOf: m.partnerOf },
+          ])
+        )
+      );
     }
   }
 
@@ -59,10 +79,7 @@ export function ResortExcelImport() {
     setProgress({ done: 0, total: list.length });
     let ok = 0;
     for (let i = 0; i < list.length; i += BATCH) {
-      const chunk = list.slice(i, i + BATCH).map((h) => ({
-        ...h.resort,
-        info: { ...h.resort.info, price_source: h.resort.info.price_source || source.trim() || null },
-      }));
+      const chunk = list.slice(i, i + BATCH).map((h) => withSource(h, source));
       try {
         const res = await fetch("/api/admin/bulk/resort-import", {
           method: "POST",
@@ -146,7 +163,7 @@ export function ResortExcelImport() {
             </button>
             <label className="ml-auto flex items-center gap-1.5 text-[12px] font-semibold text-ink-muted">
               Giá mua của (dòng nào trống):
-              <input value={source} onChange={(e) => setSource(e.target.value)} placeholder="VD: Mustgo" className="h-8 w-36 rounded-lg border border-border px-2 text-[12.5px]" />
+              <input value={source} onChange={(e) => setSource(e.target.value)} onBlur={() => check(hotels, source)} placeholder="VD: Mustgo" className="h-8 w-36 rounded-lg border border-border px-2 text-[12.5px]" />
             </label>
           </div>
 
@@ -240,7 +257,7 @@ export function ResortExcelImport() {
                 {progress.done}/{progress.total} xong
               </span>
             )}
-            <span className="text-[11.5px] text-ink-muted">Trùng mã / tên khách sạn đã có → cập nhật & thay toàn bộ hạng phòng (giữ ảnh). Chưa có → tạo mới.</span>
+            <span className="text-[11.5px] text-ink-muted">Cùng khách sạn + cùng đối tác → cập nhật (giữ ảnh). Cùng khách sạn nhưng đối tác khác → thêm bản giá của đối tác đó; web tự hiện bên RẺ NHẤT, các bên khác nằm ở “Đối tác khác”.</span>
             <Link href="/admin/bulk/resort/edit" className="ml-auto text-[12.5px] font-bold text-teal-dark underline">
               Mở bảng giá để xem / sửa →
             </Link>
@@ -259,6 +276,7 @@ function StatusChip({ st }: { st?: Status }) {
   if (!st) return <span className="text-ink-muted">…</span>;
   const map = {
     new: ["Tạo mới", "bg-teal-light text-teal-dark"],
+    partner: ["+ Đối tác mới", "bg-amber-50 text-amber-800"],
     update: ["Cập nhật", "bg-sky-50 text-sky-700"],
     created: ["✓ Đã tạo", "bg-emerald-50 text-emerald-700"],
     updated: ["✓ Đã cập nhật", "bg-emerald-50 text-emerald-700"],
@@ -270,6 +288,7 @@ function StatusChip({ st }: { st?: Status }) {
       {st.state === "failed" ? <XCircle className="h-3 w-3" /> : st.state.endsWith("ed") ? <CheckCircle2 className="h-3 w-3" /> : null}
       {label}
       {st.error && <span className="max-w-[160px] truncate font-medium">: {st.error}</span>}
+      {st.state === "partner" && st.partnerOf && <span className="max-w-[170px] truncate font-medium" title={st.partnerOf}>· đã có: {st.partnerOf}</span>}
     </span>
   );
 }

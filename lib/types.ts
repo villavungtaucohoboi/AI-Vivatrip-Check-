@@ -75,6 +75,8 @@ export interface Product {
   perks?: string | null;
   /** Giá mua của ai (nhà cung cấp / nguồn giá) — chỉ Sale xem */
   price_source?: string | null;
+  /** Nhóm khách sạn để gộp nhiều đối tác (trống = theo tên) */
+  group_key?: string | null;
   image_link?: string | null;
 }
 

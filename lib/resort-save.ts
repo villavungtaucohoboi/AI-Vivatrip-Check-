@@ -27,6 +27,7 @@ export interface ResortIn {
     star?: number | null;
     image_link?: string | null;
     price_source?: string | null;
+    group_key?: string | null;
     perks?: string | null;
     amenities?: Record<string, boolean>;
   };
@@ -42,7 +43,7 @@ export const n = (v: unknown) => (v == null || v === "" || !Number.isFinite(Numb
 const AMENITY_KEYS = ["pool", "near_beach", "sea_view", "near_lake", "karaoke", "bbq", "pickleball"];
 export const slug = (s: string) =>
   s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/gi, "d").replace(/[^a-zA-Z0-9]+/g, "").toUpperCase().slice(0, 10) || "RS";
-const colErr = (m: string) => (/column|schema cache|check constraint/i.test(m) ? "Chưa chạy SQL 0026 + 0027 + 0028 trên Supabase." : m);
+const colErr = (m: string) => (/column|schema cache|check constraint/i.test(m) ? "Chưa chạy SQL 0026 → 0029 trên Supabase." : m);
 
 
 /** Trả về id resort (tạo mới nếu chưa có id). Lỗi → throw Error tiếng Việt. */
@@ -60,6 +61,7 @@ export async function saveResort(supabase: SupabaseClient, r: ResortIn, opts: { 
     star: n(info.star),
     image_link: info.image_link?.trim() || null,
     ...(info.price_source !== undefined ? { price_source: info.price_source?.trim() || null } : {}),
+    ...(info.group_key !== undefined ? { group_key: info.group_key?.trim() || null } : {}),
     perks: info.perks?.trim() || null,
     rate_periods: r.periods.map((p) => ({
       key: p.key,

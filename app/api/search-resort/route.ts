@@ -5,6 +5,7 @@ import { getAllProducts, getAllRates } from "@/lib/catalog";
 import { parseQuery } from "@/lib/query-parser";
 import { normalize } from "@/lib/ranking";
 import { minRatePrice, quoteStay, type StayQuote } from "@/lib/resort-pricing";
+import { groupKeyOf, sourceLabel } from "@/lib/hotel-group";
 import type { Holiday, HotelRate, Product, ProductType, SearchFilters } from "@/lib/types";
 
 // TÌM RESORT / KHÁCH SẠN
@@ -43,6 +44,14 @@ export interface ResortResult {
   bestNightly: number | null;
   group: "fit" | "above" | "all";
   images: string[];
+  /** Cùng khách sạn nhưng ở ĐỐI TÁC khác, giá cao hơn (đã ẩn) — rẻ → đắt */
+  partners?: ResortPartner[];
+}
+export interface ResortPartner {
+  id: string;
+  source: string;
+  nightly: number | null;
+  roomType: string | null;
 }
 export interface ResortSearchResponse {
   results: ResortResult[];
@@ -100,7 +109,7 @@ export async function POST(req: NextRequest) {
   const budget = f.budget ?? null;
   const nights = f.date && f.checkout ? Math.max(1, Math.round((Date.parse(f.checkout) - Date.parse(f.date)) / 86400000)) : 1;
 
-  const scored: (ResortResult & { score: number; diff: number })[] = [];
+  const scored: (ResortResult & { score: number; diff: number; cheapest: number; cheapestRoom: string })[] = [];
   for (const p of products) {
     if (!types.includes(p.type)) continue;
     if (f.star && (p.star ?? 0) < f.star) continue;
@@ -140,8 +149,31 @@ export async function POST(req: NextRequest) {
     const group: ResortResult["group"] = !budget ? "all" : bn <= budget * 1.1 ? "fit" : "above";
     const diff = budget ? Math.abs(bn - budget) : bn;
 
-    scored.push({ product: p, rates: withQuote, bestRateId: best.id, bestNightly: bn, group, images: [], score, diff });
+    const cheapest = candidates.reduce((a, b) => ((b.nightly as number) < (a.nightly as number) ? b : a));
+    scored.push({ product: p, rates: withQuote, bestRateId: best.id, bestNightly: bn, group, images: [], score, diff, cheapest: cheapest.nightly as number, cheapestRoom: cheapest.room_type });
   }
+
+  // GỘP ĐỐI TÁC: cùng khách sạn → giữ bên RẺ NHẤT, các bên đắt hơn ẩn vào "đối tác khác"
+  const groups = new Map<string, typeof scored>();
+  for (const x of scored) {
+    const k = groupKeyOf(x.product);
+    groups.set(k, [...(groups.get(k) ?? []), x]);
+  }
+  const merged: typeof scored = [];
+  const siblingsOf = new Map<string, string[]>();
+  for (const list of groups.values()) {
+    list.sort((a, b) => a.cheapest - b.cheapest);
+    const [win, ...rest] = list;
+    if (rest.length) {
+      win.partners = rest.map((x) => ({ id: x.product.id, source: sourceLabel(x.product.price_source), nightly: x.cheapest, roomType: x.cheapestRoom }));
+      siblingsOf.set(win.product.id, rest.map((x) => x.product.id));
+      // điểm khớp tên lấy cao nhất của cả nhóm
+      win.score = Math.max(...list.map((x) => x.score));
+    }
+    merged.push(win);
+  }
+  scored.length = 0;
+  scored.push(...merged);
 
   scored.sort((a, b) => {
     if (b.score !== a.score) return b.score - a.score;
@@ -155,19 +187,21 @@ export async function POST(req: NextRequest) {
     const { data: imgs } = await createPublicClient()
       .from("product_images")
       .select("product_id, image_url, sort_order")
-      .in("product_id", page.map((x) => x.product.id))
+      .in("product_id", page.flatMap((x) => [x.product.id, ...(siblingsOf.get(x.product.id) ?? [])]))
       .order("sort_order");
     const byP = new Map<string, string[]>();
     for (const im of (imgs ?? []) as { product_id: string; image_url: string }[]) {
       byP.set(im.product_id, [...(byP.get(im.product_id) ?? []), im.image_url]);
     }
     for (const x of page) {
-      x.images = byP.get(x.product.id) ?? (x.product.thumbnail_url ? [x.product.thumbnail_url] : []);
+      // bên rẻ nhất chưa có ảnh → mượn ảnh của đối tác khác cùng khách sạn
+      const sib = (siblingsOf.get(x.product.id) ?? []).map((id) => byP.get(id)).find((v) => v?.length);
+      x.images = byP.get(x.product.id) ?? sib ?? (x.product.thumbnail_url ? [x.product.thumbnail_url] : []);
     }
   }
 
   const res: ResortSearchResponse = {
-    results: page.map(({ score: _s, diff: _d, ...rest }) => rest),
+    results: page.map(({ score: _s, diff: _d, cheapest: _c, cheapestRoom: _r, ...rest }) => rest),
     total: scored.length,
     fitCount: scored.filter((x) => x.group === "fit").length,
     parsedFilters: f,

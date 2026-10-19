@@ -64,6 +64,7 @@ interface Block {
     star: number | null;
     image_link: string;
     price_source: string;
+    group_key: string;
     perks: string;
     amenities: Record<string, boolean>;
   };
@@ -106,6 +107,7 @@ function fromProduct(p: Product, rates: HotelRate[]): Block {
       star: p.star ?? null,
       image_link: p.image_link ?? "",
       price_source: p.price_source ?? "",
+      group_key: p.group_key ?? "",
       perks: p.perks ?? "",
       amenities: Object.fromEntries(AMENITIES.map((a) => [a.k, !!p[a.k]])),
     },
@@ -132,7 +134,7 @@ function fromProduct(p: Product, rates: HotelRate[]): Block {
 function emptyBlock(type: ResortType = "resort"): Block {
   return {
     key: nk("new"),
-    info: { product_code: "", product_name: "", type, area: "", address: "", star: null, image_link: "", price_source: "", perks: "", amenities: {} },
+    info: { product_code: "", product_name: "", type, area: "", address: "", star: null, image_link: "", price_source: "", group_key: "", perks: "", amenities: {} },
     periods: [{ key: "p1", name: "Giá chung", rangesText: "", weekendSplit: false, holiday: false }],
     weekend: [5, 6],
     surcharge: "",
@@ -223,6 +225,10 @@ export function ResortPricingSheet({
   const [q, setQ] = useState("");
   const [type, setType] = useState<"" | ResortType>("");
   const [open, setOpen] = useState<Set<string>>(new Set());
+  // Khối đang MỞ RỘNG (xem bảng phòng). Mặc định thu gọn → danh sách gọn, bấm vào mới sửa.
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [area, setArea] = useState("");
+  const [source, setSource] = useState("");
   const [aiFor, setAiFor] = useState<string | "new" | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -233,11 +239,23 @@ export function ResortPricingSheet({
   const dirty = useMemo(() => blocks.filter((b) => !b.id || snap(b) !== origin[b.key]), [blocks, origin]);
   useUnsavedGuard(dirty.length > 0);
 
+  const areas = useMemo(() => [...new Set(blocks.map((b) => b.info.area.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, "vi")), [blocks]);
+  const sources = useMemo(() => [...new Set(blocks.map((b) => b.info.price_source.trim()).filter(Boolean))].sort(), [blocks]);
   const visible = blocks.filter(
     (b) =>
       !b.id ||
-      ((!type || b.info.type === type) && (!q.trim() || plain(`${b.info.product_name} ${b.info.product_code} ${b.info.area}`).includes(plain(q))))
+      ((!type || b.info.type === type) &&
+        (!area || b.info.area.trim() === area) &&
+        (!source || (source === "-" ? !b.info.price_source.trim() : b.info.price_source.trim() === source)) &&
+        (!q.trim() || plain(`${b.info.product_name} ${b.info.product_code} ${b.info.area} ${b.info.price_source}`).includes(plain(q))))
   );
+  const toggleExpand = (k: string) =>
+    setExpanded((prev) => {
+      const s = new Set(prev);
+      if (s.has(k)) s.delete(k);
+      else s.add(k);
+      return s;
+    });
 
   const upd = (key: string, fn: (b: Block) => Block) => setBlocks((prev) => prev.map((b) => (b.key === key ? fn(b) : b)));
   const updRoom = (bk: string, rk: string, p: Partial<Room>) => upd(bk, (b) => ({ ...b, rooms: b.rooms.map((r) => (r.key === rk ? { ...r, ...p } : r)) }));
@@ -330,12 +348,41 @@ export function ResortPricingSheet({
             {t === "" ? "Tất cả" : PRODUCT_TYPE_LABEL[t]}
           </button>
         ))}
+        <select value={area} onChange={(e) => setArea(e.target.value)} className="h-10 rounded-xl border border-border bg-white px-2 text-[12.5px] font-bold text-ink">
+          <option value="">📍 Mọi khu vực</option>
+          {areas.map((a) => (
+            <option key={a} value={a}>
+              {a} ({blocks.filter((b) => b.info.area.trim() === a).length})
+            </option>
+          ))}
+        </select>
+        {sources.length > 0 && (
+          <select value={source} onChange={(e) => setSource(e.target.value)} className="h-10 rounded-xl border border-border bg-white px-2 text-[12.5px] font-bold text-ink">
+            <option value="">🤝 Mọi đối tác</option>
+            {sources.map((x) => (
+              <option key={x} value={x}>
+                {x}
+              </option>
+            ))}
+            <option value="-">Chưa ghi đối tác</option>
+          </select>
+        )}
+        <button
+          onClick={() => setExpanded((prev) => (prev.size ? new Set() : new Set(visible.map((b) => b.key))))}
+          className="h-10 rounded-xl border border-border bg-white px-3 text-[12.5px] font-bold text-ink-muted"
+        >
+          {expanded.size ? "Thu gọn tất cả" : "Mở tất cả"}
+        </button>
+        <span className="text-[12px] font-semibold text-ink-muted">{visible.length} nơi</span>
       </div>
 
-      <div className="mt-3 space-y-4">
+      <div className="mt-3 space-y-2">
         {visible.map((b) => {
           const isDirty = dirty.some((d) => d.key === b.key);
-          const isOpen = open.has(b.key) || !b.id;
+          const isExpanded = expanded.has(b.key) || !b.id;
+          const isOpen = isExpanded && (open.has(b.key) || !b.id);
+          const allPrices = b.rooms.flatMap((r) => Object.values(r.prices).flatMap((v) => [v?.wd, v?.we])).filter((x): x is number => typeof x === "number" && x > 0);
+          const minP = allPrices.length ? Math.min(...allPrices) : null;
           const cols = b.periods.flatMap((p) =>
             p.weekendSplit
               ? [
@@ -347,7 +394,9 @@ export function ResortPricingSheet({
           return (
             <div key={b.key} className={cn("overflow-hidden rounded-2xl border bg-white", isDirty ? "border-sand ring-1 ring-sand/50" : "border-border")}>
               {/* Tiêu đề */}
-              <div className="flex flex-wrap items-center gap-2 bg-teal-light/60 px-3 py-2.5">
+              <div className={cn("flex flex-wrap items-center gap-2 px-3 py-2.5", isExpanded ? "bg-teal-light/60" : "bg-white hover:bg-paper/70")}>
+                <button type="button" onClick={() => toggleExpand(b.key)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                <ChevronDown className={cn("h-4 w-4 shrink-0 text-ink-muted transition-transform", !isExpanded && "-rotate-90")} />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[14.5px] font-bold text-ink">
                     {b.info.product_name || <span className="text-ink-muted">Resort / khách sạn mới</span>}
@@ -357,16 +406,31 @@ export function ResortPricingSheet({
                     {PRODUCT_TYPE_LABEL[b.info.type]} · {b.info.area || "chưa có khu vực"} · {b.periods.length} giai đoạn · {b.rooms.length} hạng phòng
                     {!b.id && <span className="ml-1.5 rounded bg-teal px-1.5 font-semibold text-white">MỚI</span>}
                     {b.id && isDirty && <span className="ml-1.5 rounded bg-sand-light px-1.5 font-semibold text-sand-dark">chưa lưu</span>}
+                    {b.info.price_source && <span className="ml-1.5 font-semibold text-amber-700">· 🤝 {b.info.price_source}</span>}
                   </p>
                 </div>
+                {!isExpanded && minP != null && (
+                  <span className="shrink-0 text-right text-[12px] text-ink-muted">
+                    từ <b className="text-[14px] text-ink">{new Intl.NumberFormat("vi-VN").format(Math.round(minP / 1000))}k</b>
+                  </span>
+                )}
+                </button>
                 <button
-                  onClick={() => setAiFor(b.key)}
+                  onClick={() => {
+                    setExpanded((prev) => new Set(prev).add(b.key));
+                    setAiFor(b.key);
+                  }}
                   className="flex items-center gap-1 rounded-lg bg-gradient-to-r from-teal to-sand px-3 py-1.5 text-[12px] font-bold text-white"
                 >
                   <Sparkles className="h-3.5 w-3.5" /> AI điền
                 </button>
                 <button
-                  onClick={() => toggleOpen(b.key)}
+                  onClick={() => {
+                    if (!isExpanded) {
+                      setExpanded((prev) => new Set(prev).add(b.key));
+                      setOpen((prev) => new Set(prev).add(b.key));
+                    } else toggleOpen(b.key);
+                  }}
                   className="flex items-center gap-1 rounded-lg border border-border bg-white px-3 py-1.5 text-[12px] font-bold text-ink"
                 >
                   Thông tin · giai đoạn · phụ thu <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", isOpen && "rotate-180")} />
@@ -423,6 +487,9 @@ export function ResortPricingSheet({
                       </Field>
                       <Field label="Giá mua của (nguồn / NCC — chỉ Sale xem)" span>
                         <input value={b.info.price_source} placeholder="VD: Mustgo · 092 5959 777" onChange={(e) => upd(b.key, (x) => ({ ...x, info: { ...x.info, price_source: e.target.value } }))} className={inp} />
+                      </Field>
+                      <Field label="Gộp đối tác — tên chung của khách sạn (trống = tự gộp theo tên)" span>
+                        <input value={b.info.group_key} placeholder="Chỉ điền khi 2 đối tác ghi tên khác nhau, VD: Melia Ba Vi" onChange={(e) => upd(b.key, (x) => ({ ...x, info: { ...x.info, group_key: e.target.value } }))} className={inp} />
                       </Field>
                       <Field label="Link album ảnh gốc (Sale xem)" span>
                         <input value={b.info.image_link} onChange={(e) => upd(b.key, (x) => ({ ...x, info: { ...x.info, image_link: e.target.value } }))} className={inp} />
@@ -567,6 +634,7 @@ export function ResortPricingSheet({
               )}
 
               {/* Bảng hạng phòng × giai đoạn */}
+              {isExpanded && (<>
               <div className="overflow-x-auto">
                 <table className="w-full border-collapse text-[12.5px]" style={{ minWidth: 640 + cols.length * 110 }}>
                   <thead>
@@ -674,6 +742,7 @@ export function ResortPricingSheet({
                 </button>
                 <span className="text-[11px] text-ink-muted">Gõ “1700” = 1.700.000đ · NL = người lớn, TE = trẻ em tối đa/phòng</span>
               </div>
+              </>)}
             </div>
           );
         })}

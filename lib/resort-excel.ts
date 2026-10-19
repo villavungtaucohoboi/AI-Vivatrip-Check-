@@ -123,6 +123,12 @@ function readSheet(wb: XLSX.WorkBook, want: string, cols: string[]): Row[] {
     .filter((o) => str(o[cols[0]]));
 }
 
+/** File có đúng các sheet của mẫu bảng giá khách sạn? */
+export function isResortWorkbook(buf: ArrayBuffer): boolean {
+  const names = XLSX.read(buf, { type: "array", bookSheets: true }).SheetNames.map(norm);
+  return names.some((n) => n.includes(norm(SHEETS.hotel))) && names.some((n) => n.includes(norm(SHEETS.room)));
+}
+
 export interface ParsedHotel {
   resort: ResortIn;
   note: string;

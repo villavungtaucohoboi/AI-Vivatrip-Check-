@@ -22,6 +22,8 @@ import { ProductGallery } from "@/components/product-gallery";
 import { CopyButton } from "@/components/copy-button";
 import { DownloadImagesButton } from "@/components/download-images-button";
 import { ResortDetailPanel } from "@/components/resort/resort-detail-panel";
+import { getAllProducts, getAllRates } from "@/lib/catalog";
+import { groupKeyOf } from "@/lib/hotel-group";
 import { VillaPricingTable } from "@/components/villa-pricing-table";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -94,6 +96,16 @@ export default async function ProductDetailPage({
     isVilla && date ? resolveProductPricing(product, { date }, (holidays ?? []) as Holiday[]).context : undefined;
 
 
+  // Cùng khách sạn ở các ĐỐI TÁC khác (để so giá / chốt thêm)
+  let partners: { product: Product; rates: HotelRate[] }[] = [];
+  if (!isVilla) {
+    const [all, allRates] = await Promise.all([getAllProducts(), getAllRates()]);
+    const gk = groupKeyOf(product);
+    partners = all
+      .filter((p) => p.id !== product.id && p.type !== "villa" && groupKeyOf(p) === gk)
+      .map((p) => ({ product: p, rates: allRates.filter((r) => r.product_id === p.id) }));
+  }
+
   if (!isVilla) {
     return (
       <main className="mx-auto max-w-3xl px-4 py-6 sm:px-6 sm:py-8">
@@ -154,6 +166,7 @@ export default async function ProductDetailPage({
             rates={(rates ?? []) as HotelRate[]}
             holidays={(holidays ?? []) as Holiday[]}
             images={gallery.map((g) => g.image_url)}
+            partners={partners}
             initialCheckin={date}
             initialCheckout={checkout}
           />

@@ -44,6 +44,12 @@ export function ResortGridCard({
   const amen = AMENITY.filter((a) => p[a.key]).slice(0, 2);
   const href = `/products/${p.id}${checkin ? `?date=${checkin}${checkout ? `&checkout=${checkout}` : ""}` : ""}`;
 
+  // giá rẻ nhất của bên đang hiện (so với đối tác khác)
+  const okRates = result.rates.filter((r) => r.nightly != null && r.fitsGuests);
+  const myMin = (okRates.length ? okRates : result.rates.filter((r) => r.nightly != null)).reduce<number | null>(
+    (m, r) => (m == null || (r.nightly as number) < m ? (r.nightly as number) : m),
+    null
+  );
   const copy = async (text: string, msg: string) => {
     await navigator.clipboard.writeText(text).catch(() => null);
     toast.success(msg);
@@ -169,6 +175,29 @@ export function ResortGridCard({
         </div>
       </div>
     </Link>
+      {/* Cùng khách sạn ở đối tác khác (giá cao hơn → đã ẩn, vẫn chốt được) */}
+      {!!result.partners?.length && (
+        <div className="border-t border-border/70 bg-amber-50/50 px-2 py-1.5 lg:px-3">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-amber-800">🤝 Đối tác khác chốt được</p>
+          <div className="mt-0.5 flex flex-col gap-0.5">
+            {result.partners.map((pt) => (
+              <Link
+                key={pt.id}
+                href={`/products/${pt.id}${checkin ? `?date=${checkin}${checkout ? `&checkout=${checkout}` : ""}` : ""}`}
+                className="flex items-center justify-between gap-1 text-[11px] hover:underline lg:text-[11.5px]"
+              >
+                <span className="truncate font-semibold text-ink">{pt.source}</span>
+                <span className="shrink-0 tabular-nums text-ink-muted">
+                  {k(pt.nightly)}
+                  {pt.nightly != null && myMin != null && pt.nightly > myMin && (
+                    <span className="ml-1 text-[10px] text-hot">+{k(pt.nightly - myMin)}</span>
+                  )}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
       {/* Gửi khách ngay từ kết quả tìm kiếm — không cần mở resort */}
       <div className="flex flex-wrap gap-1 border-t border-border/70 p-1.5 lg:gap-1.5 lg:p-2">
         <PhotoShareButtons images={result.images} name={p.product_name} description={() => resortQuoteText(p, result.rates)} compact className="flex-1" />

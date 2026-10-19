@@ -12,6 +12,8 @@ import { Badge } from "@/components/ui/badge";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { formatVND } from "@/lib/format";
 import type { ImportRowResult, ImportSummary } from "@/lib/types";
+import { isResortWorkbook } from "@/lib/resort-excel";
+import { ResortExcelImport } from "@/components/admin/bulk/resort-excel-import";
 
 type Step = "upload" | "preview" | "done";
 
@@ -23,6 +25,8 @@ export function ImportWizard() {
   const [parsing, setParsing] = useState(false);
   const [importing, setImporting] = useState(false);
   const [summary, setSummary] = useState<ImportSummary | null>(null);
+  // File bảng giá KHÁCH SẠN (mẫu 3 sheet) → tự chuyển sang trình nhập khách sạn
+  const [resortFile, setResortFile] = useState<File | null>(null);
 
   function downloadTemplate() {
     const wb = buildTemplateWorkbook();
@@ -37,6 +41,10 @@ export function ImportWizard() {
 
     try {
       const buffer = await file.arrayBuffer();
+      if (isResortWorkbook(buffer)) {
+        setResortFile(file);
+        return;
+      }
       const raw = parseWorkbook(buffer);
 
       const { data: existing } = await supabase.from("products").select("product_code");
@@ -98,6 +106,20 @@ export function ImportWizard() {
   const newCount = rows.filter((r) => r._status === "new").length;
   const updateCount = rows.filter((r) => r._status === "update").length;
   const errorCount = rows.filter((r) => r._status === "error").length;
+
+  if (resortFile) {
+    return (
+      <div className="space-y-3">
+        <p className="rounded-xl border border-teal/30 bg-teal-light/60 p-3 text-[13px] text-teal-dark">
+          Đây là file <b>bảng giá khách sạn / resort</b> (3 sheet Khách sạn · Giai đoạn · Phòng &amp; giá) → đã chuyển sang trình nhập khách sạn.{" "}
+          <button type="button" onClick={() => setResortFile(null)} className="font-bold underline">
+            Chọn file khác
+          </button>
+        </p>
+        <ResortExcelImport initialFile={resortFile} />
+      </div>
+    );
+  }
 
   if (step === "done" && summary) {
     return (

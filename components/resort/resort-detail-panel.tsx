@@ -10,6 +10,10 @@ import { PhotoShareButtons } from "@/components/resort/photo-share-buttons";
 import { Collapsible } from "@/components/resort/resort-result-card";
 import { resortPriceQuoteText, resortQuoteText } from "@/lib/resort-text";
 import { quoteStay } from "@/lib/resort-pricing";
+import Link from "next/link";
+import { cn } from "@/lib/utils";
+import { minRatePrice } from "@/lib/resort-pricing";
+import { sourceLabel } from "@/lib/hotel-group";
 import type { Holiday, HotelRate, Product } from "@/lib/types";
 
 /** Phần giá + gửi khách trên trang chi tiết resort / khách sạn. */
@@ -20,7 +24,9 @@ export function ResortDetailPanel({
   images,
   initialCheckin,
   initialCheckout,
+  partners = [],
 }: {
+  partners?: { product: Product; rates: HotelRate[] }[];
   product: Product;
   rates: HotelRate[];
   holidays: Holiday[];
@@ -77,6 +83,10 @@ export function ResortDetailPanel({
         </button>
       )}
 
+      {partners.length > 0 && (
+        <PartnerCompare product={product} rates={rates} holidays={holidays} partners={partners} checkin={checkin} checkout={checkout} />
+      )}
+
       {product.perks && (
         <Collapsible icon={<Gift className="h-4 w-4 text-teal" />} title="Quyền lợi / tiện ích bao gồm" tone="fee">
           <NoteView text={product.perks} />
@@ -123,6 +133,66 @@ export function ResortDetailPanel({
         >
           <Copy className="h-4 w-4" /> Copy mô tả resort
         </button>
+      </div>
+    </div>
+  );
+}
+
+/** Giá rẻ nhất / đêm của 1 bên (theo ngày đã chọn, không chọn ngày → giá thấp nhất). */
+function cheapestOf(p: Product, rates: HotelRate[], holidays: Holiday[], checkin: string, checkout: string) {
+  let best: { avg: number; room: string } | null = null;
+  for (const r of rates) {
+    const v = checkin ? quoteStay(r, p, holidays, checkin, checkout || undefined).avg : minRatePrice(r, p);
+    if (v != null && (!best || v < best.avg)) best = { avg: v, room: r.room_type };
+  }
+  return best;
+}
+
+function PartnerCompare({
+  product,
+  rates,
+  holidays,
+  partners,
+  checkin,
+  checkout,
+}: {
+  product: Product;
+  rates: HotelRate[];
+  holidays: Holiday[];
+  partners: { product: Product; rates: HotelRate[] }[];
+  checkin: string;
+  checkout: string;
+}) {
+  const rows = [{ product, rates, me: true }, ...partners.map((x) => ({ ...x, me: false }))]
+    .map((x) => ({ ...x, best: cheapestOf(x.product, x.rates, holidays, checkin, checkout) }))
+    .sort((a, b) => (a.best?.avg ?? Infinity) - (b.best?.avg ?? Infinity));
+  const min = rows[0]?.best?.avg ?? null;
+  const k = (n: number) => `${new Intl.NumberFormat("vi-VN").format(Math.round(n / 1000))}k`;
+  return (
+    <div className="rounded-card border border-amber-200 bg-amber-50/60 p-3">
+      <p className="text-[12px] font-extrabold uppercase tracking-wide text-amber-800">
+        🤝 So giá đối tác {checkin ? `· ${checkin.split("-").reverse().join("/").slice(0, 5)}` : "· giá thấp nhất"}
+        <span className="ml-1.5 rounded bg-amber-600 px-1.5 py-0.5 text-[9.5px] text-white">CHỈ SALE</span>
+      </p>
+      <div className="mt-1.5 divide-y divide-amber-200/70">
+        {rows.map((x, i) => (
+          <Link
+            key={x.product.id}
+            href={`/products/${x.product.id}${checkin ? `?date=${checkin}${checkout ? `&checkout=${checkout}` : ""}` : ""}`}
+            className={cn("flex items-center gap-2 py-1.5 text-[13px]", x.me ? "font-bold" : "hover:underline")}
+          >
+            <span className="w-5 text-center">{i === 0 ? "🏆" : i + 1}</span>
+            <span className="min-w-0 flex-1 truncate">
+              {sourceLabel(x.product.price_source)}
+              {x.me && <span className="ml-1 rounded bg-teal px-1 text-[10px] text-white">đang xem</span>}
+              {x.best && <span className="ml-1 text-[11px] font-normal text-ink-muted">· {x.best.room}</span>}
+            </span>
+            <span className="tabular-nums">
+              {x.best ? k(x.best.avg) : "—"}
+              {x.best && min != null && x.best.avg > min && <span className="ml-1 text-[11px] text-hot">+{k(x.best.avg - min)}</span>}
+            </span>
+          </Link>
+        ))}
       </div>
     </div>
   );

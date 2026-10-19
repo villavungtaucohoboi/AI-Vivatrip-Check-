@@ -14,7 +14,14 @@ export default async function ImportPage() {
           <ArrowLeft className="h-4 w-4" />
           Quay lại danh sách
         </Link>
-        <h1 className="mb-5 font-display text-2xl text-ink">Import Excel</h1>
+        <h1 className="mb-2 font-display text-2xl text-ink">Import Excel</h1>
+        <p className="mb-5 text-[13px] text-ink-muted">
+          File bảng giá <b>khách sạn / resort</b> (nhiều giai đoạn, hạng phòng)? Up ở đây cũng được — web tự nhận ra, hoặc vào{" "}
+          <Link href="/admin/bulk/resort/import" className="font-bold text-teal-dark underline">
+            Nhập file Excel bảng giá khách sạn
+          </Link>
+          .
+        </p>
         <ImportWizard />
       </main>
   );
