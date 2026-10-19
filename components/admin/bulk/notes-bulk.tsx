@@ -6,6 +6,7 @@ import { History, Loader2, RotateCcw, Search, Sparkles, Square } from "lucide-re
 import { toast } from "sonner";
 import { BulkSaveBar, useUnsavedGuard } from "@/components/admin/bulk/bulk-ui";
 import { cn } from "@/lib/utils";
+import { checkNote, type CheckLevel, type NoteCheck } from "@/lib/note-check";
 
 export interface NoteRow {
   id: string;
@@ -51,11 +52,23 @@ export function NotesBulk({ initial }: { initial: NoteRow[] }) {
   const [q, setQ] = useState("");
   const [type, setType] = useState<"all" | "villa" | "resort">("villa");
   const [onlyUnsummarized, setOnlyUnsummarized] = useState(false);
+  const [checkFilter, setCheckFilter] = useState<CheckLevel | "">("");
+  const [openIssues, setOpenIssues] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const cancelRef = useRef(false);
   const lastAiError = useRef<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // TỰ KIỂM TRA: so bản rút gọn (đang lưu hoặc vừa tạo) với bản gốc
+  const checks = useMemo(() => {
+    const m = new Map<string, NoteCheck>();
+    for (const r of rows) {
+      const src = r.original ?? r.pendingOriginal;
+      if (src && r.draft.trim() && r.draft !== src) m.set(r.id, checkNote(src, r.draft));
+    }
+    return m;
+  }, [rows]);
 
   const visible = useMemo(() => {
     const nq = plain(q.trim());
@@ -64,9 +77,11 @@ export function NotesBulk({ initial }: { initial: NoteRow[] }) {
         r.note.trim().length > 0 &&
         (type === "all" || (type === "villa" ? r.type === "villa" : r.type !== "villa")) &&
         (!onlyUnsummarized || r.original == null) &&
+        (!checkFilter || checks.get(r.id)?.level === checkFilter) &&
         (!nq || plain(`${r.name} ${r.code} ${r.area}`).includes(nq))
     );
-  }, [rows, q, type, onlyUnsummarized]);
+  }, [rows, q, type, onlyUnsummarized, checkFilter, checks]);
+  const countBy = (lv: CheckLevel) => rows.filter((r) => checks.get(r.id)?.level === lv && (type === "all" || (type === "villa" ? r.type === "villa" : r.type !== "villa"))).length;
 
   const dirty = rows.filter((r) => r.draft !== r.note);
   useUnsavedGuard(dirty.length > 0);
@@ -182,6 +197,24 @@ export function NotesBulk({ initial }: { initial: NoteRow[] }) {
             Chỉ căn chưa rút gọn
           </label>
         </div>
+        <div className="flex flex-wrap items-center gap-1.5 text-[12px] font-bold">
+          <span className="text-ink-muted">Tự kiểm tra bản rút gọn:</span>
+          {([
+            ["", "Tất cả", "border-border bg-white text-ink-muted"],
+            ["bad", `❌ Sai thông tin (${countBy("bad")})`, "border-hot/30 bg-hot-light text-hot"],
+            ["warn", `⚠ Cần xem (${countBy("warn")})`, "border-amber-200 bg-amber-50 text-amber-800"],
+            ["ok", `✅ Ổn (${countBy("ok")})`, "border-emerald-200 bg-emerald-50 text-emerald-700"],
+          ] as const).map(([v, t, c]) => (
+            <button key={v || "all"} onClick={() => setCheckFilter(v)} className={cn("rounded-full border px-2.5 py-1", c, checkFilter === v && "ring-2 ring-teal")}>
+              {t}
+            </button>
+          ))}
+          {checkFilter && checkFilter !== "ok" && (
+            <button onClick={() => setSelected(new Set(visible.map((r) => r.id)))} className="rounded-full bg-teal px-2.5 py-1 text-white">
+              Chọn {visible.length} căn này để rút gọn lại
+            </button>
+          )}
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <label className="flex items-center gap-1.5 text-[12.5px] font-semibold text-ink">
             <input
@@ -226,6 +259,7 @@ export function NotesBulk({ initial }: { initial: NoteRow[] }) {
         {visible.map((r) => {
           const changed = r.draft !== r.note;
           const canRestore = r.original != null && r.draft !== r.original;
+          const ck = checks.get(r.id);
           return (
             <div key={r.id} className={cn("rounded-2xl border bg-white p-3", changed ? "border-sand ring-1 ring-sand/40" : "border-border")}>
               <div className="flex flex-wrap items-center gap-2">
@@ -249,6 +283,17 @@ export function NotesBulk({ initial }: { initial: NoteRow[] }) {
                     {r.code ? ` · ${r.code}` : ""} · {r.note.length} → <b className={changed ? "text-sand-dark" : ""}>{r.draft.length}</b> ký tự
                     {r.original != null && <span className="ml-1 rounded bg-teal-light px-1 font-semibold text-teal-dark">đã rút gọn</span>}
                     {changed && <span className="ml-1 rounded bg-sand-light px-1 font-semibold text-sand-dark">chưa lưu</span>}
+                    {ck && (
+                      <button
+                        onClick={() => setOpenIssues(openIssues === r.id ? null : r.id)}
+                        className={cn(
+                          "ml-1 rounded px-1 font-bold",
+                          ck.level === "bad" ? "bg-hot-light text-hot" : ck.level === "warn" ? "bg-amber-100 text-amber-800" : "bg-emerald-50 text-emerald-700"
+                        )}
+                      >
+                        {ck.level === "bad" ? `❌ Sai ${ck.issues.length} chỗ` : ck.level === "warn" ? `⚠ Cần xem ${ck.issues.length} chỗ` : "✅ Ổn"}
+                      </button>
+                    )}
                     {r.engine && changed && (
                       <span className={r.engine === "ai" ? "ml-1 text-[10.5px]" : "ml-1 rounded bg-amber-100 px-1 text-[10.5px] font-bold text-amber-800"}>
                         {r.engine === "ai" ? "(AI)" : "⚠ bộ lọc tự động – AI chưa chạy, xem kỹ / bấm Rút gọn lại"}
@@ -285,7 +330,16 @@ export function NotesBulk({ initial }: { initial: NoteRow[] }) {
                 </div>
               </div>
 
-              {(changed || r.busy) && (
+              {ck && ck.level !== "ok" && (openIssues === r.id || checkFilter) && (
+                <ul className="mt-1.5 space-y-0.5 rounded-lg bg-paper-dim px-2.5 py-1.5 text-[12px]">
+                  {ck.issues.map((i, k) => (
+                    <li key={k} className={i.level === "bad" ? "font-semibold text-hot" : "text-amber-800"}>
+                      {i.level === "bad" ? "❌" : "⚠"} {i.text}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {(changed || r.busy) && !(openIssues === r.id && r.original != null) && (
                 <div className="mt-2.5 grid gap-2 lg:grid-cols-2">
                   <div>
                     <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-ink-muted">Đang lưu hiện tại</p>
@@ -302,7 +356,24 @@ export function NotesBulk({ initial }: { initial: NoteRow[] }) {
                   </div>
                 </div>
               )}
-              {!changed && !r.busy && (
+              {!r.busy && openIssues === r.id && r.original != null && (
+                <div className="mt-2.5 grid gap-2 lg:grid-cols-2">
+                  <div>
+                    <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-ink-muted">Bản gốc</p>
+                    <div className="max-h-72 overflow-y-auto whitespace-pre-line rounded-xl bg-paper-dim p-2.5 text-[12.5px] text-ink-muted">{r.original}</div>
+                  </div>
+                  <div>
+                    <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-teal-dark">Bản rút gọn đang lưu (sửa tay được)</p>
+                    <textarea
+                      value={r.draft}
+                      onChange={(e) => patch(r.id, { draft: e.target.value })}
+                      rows={12}
+                      className="w-full rounded-xl border border-teal/40 bg-white p-2.5 text-[13px] leading-relaxed text-ink outline-none focus:ring-2 focus:ring-teal/20"
+                    />
+                  </div>
+                </div>
+              )}
+              {!changed && !r.busy && openIssues !== r.id && (
                 <p className="mt-1.5 line-clamp-2 whitespace-pre-line text-[12.5px] text-ink-muted">{r.note}</p>
               )}
             </div>
