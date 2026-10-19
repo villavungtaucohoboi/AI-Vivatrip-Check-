@@ -9,7 +9,7 @@ import type { ResortIn } from "@/lib/resort-save";
  * Cột được nhận theo TÊN tiêu đề (đổi thứ tự cột vẫn được).
  */
 
-export const MAX_PERIODS = 8;
+export const MAX_PERIODS = 20;
 export const SHEETS = { hotel: "Khách sạn", period: "Giai đoạn", room: "Phòng & giá", guide: "Hướng dẫn" };
 export const HOTEL_COLS = [
   "Mã KS *",
@@ -31,6 +31,7 @@ export const HOTEL_COLS = [
   "Quyền lợi (gửi khách)",
   "Phụ thu",
   "Tóm tắt hợp đồng (chỉ Sale)",
+  "Gộp đối tác (tên chung)",
   "Lưu ý (không nhập vào web)",
 ];
 export const PERIOD_COLS = ["Mã KS *", "GĐ số *", "Tên giai đoạn *", "Từ ngày", "Đến ngày", "Theo lịch ngày lễ chung (x)"];
@@ -221,6 +222,8 @@ export function parseResortWorkbook(buf: ArrayBuffer, today = iso(new Date())): 
           star: num(h["Hạng sao"]),
           image_link: str(h["Link album ảnh"]) || null,
           price_source: str(h["Giá mua của"]) || null,
+          // cùng 1 khách sạn ở nhiều đối tác ghi tên khác nhau → tên chung để web gộp & hiện bên rẻ nhất
+          group_key: str(h["Gộp đối tác (tên chung)"]) || undefined,
           perks: str(h["Quyền lợi (gửi khách)"]) || null,
           amenities: Object.fromEntries(AMEN.map(([label, k]) => [k, yes(h[label])])),
         },
