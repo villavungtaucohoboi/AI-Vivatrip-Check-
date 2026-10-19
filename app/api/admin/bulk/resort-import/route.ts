@@ -89,7 +89,8 @@ export async function POST(req: NextRequest) {
   for (const r of resorts) {
     try {
       const m = match(r);
-      const info = m.id ? r.info : { ...r.info, product_code: m.code ?? r.info.product_code };
+      // Cập nhật KS đã có → GIỮ mã cũ (mã trong file có thể đang thuộc bản của đối tác khác → lỗi trùng mã)
+      const info = m.id ? { ...r.info, product_code: undefined } : { ...r.info, product_code: m.code ?? r.info.product_code };
       const res = await saveResort(supabase, { ...r, id: m.id, info }, { replaceRooms: true });
       if (res.created) {
         codes.add(String(info.product_code ?? "").toUpperCase());

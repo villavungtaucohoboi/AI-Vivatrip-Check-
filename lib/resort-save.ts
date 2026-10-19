@@ -86,7 +86,7 @@ export async function saveResort(supabase: SupabaseClient, r: ResortIn, opts: { 
   } else {
     if (info.product_code?.trim()) fields.product_code = info.product_code.trim();
     const { error } = await supabase.from("products").update(fields).eq("id", id);
-    if (error) throw new Error(colErr(error.message));
+    if (error) throw new Error(/duplicate|unique/i.test(error.message) ? `Mã "${fields.product_code}" đã thuộc khách sạn khác — đổi mã hoặc để trống.` : colErr(error.message));
   }
 
   // Kiểm tra / dựng toàn bộ hạng phòng TRƯỚC khi xoá phòng cũ → lỗi thì không mất dữ liệu
