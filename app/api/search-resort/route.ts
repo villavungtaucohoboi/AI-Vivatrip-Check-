@@ -3,7 +3,7 @@ import { unstable_cache } from "next/cache";
 import { createPublicClient } from "@/lib/supabase/public-client";
 import { getAllProducts, getAllRates } from "@/lib/catalog";
 import { parseQuery } from "@/lib/query-parser";
-import { normalize } from "@/lib/ranking";
+import { hasPhrase, matchPlaces, placeNorm } from "@/lib/vn-places";
 import { minRatePrice, quoteStay, type StayQuote } from "@/lib/resort-pricing";
 import { groupKeyOf, sourceLabel } from "@/lib/hotel-group";
 import type { Holiday, HotelRate, Product, ProductType, SearchFilters } from "@/lib/types";
@@ -104,8 +104,35 @@ export async function POST(req: NextRequest) {
   const ratesBy = new Map<string, HotelRate[]>();
   for (const r of rates) ratesBy.set(r.product_id, [...(ratesBy.get(r.product_id) ?? []), r]);
 
-  const areaN = f.area ? normalize(f.area) : "";
-  const nameN = f.name ? normalize(f.name) : "";
+  // ĐỊA DANH: "Quảng Ninh" → Hạ Long, Bãi Cháy, Tuần Châu, Vân Đồn…; "Tuần Châu" → đúng Tuần Châu
+  // (khu vực chọn tay ở bộ lọc vẫn ưu tiên hơn câu chữ)
+  const place = !body.filters?.area && query ? matchPlaces(query) : null;
+  let placeTest = place?.test ?? null;
+  if (place) f.area = place.label;
+  const areaN = !place && f.area ? placeNorm(f.area) : "";
+  // tên còn lại sau khi bỏ địa danh + chữ chung chung (khách sạn, resort…)
+  const GENERIC = new Set(["khach", "san", "ks", "hotel", "resort", "homestay", "villa", "o", "tai", "gan", "quanh", "khu", "vuc"]);
+  const nameWords = placeNorm(f.name ?? "")
+    .split(" ")
+    .filter((w) => w.length >= 2 && w !== "|" && !GENERIC.has(w) && !/^\d+$/.test(w) && !place?.words.includes(w));
+  const nameN = nameWords.join(" ");
+  const otherText = (p: Product) => `${p.sub_region ?? ""} | ${p.address ?? ""} | ${p.product_name} | ${p.group_key ?? ""}`;
+  const placeText = (p: Product) => placeNorm(`${p.area ?? ""} | ${otherText(p)}`);
+  // không có khách sạn nào đúng điểm nhỏ (VD Tuần Châu) → mở rộng ra khu vực cha (Hạ Long)
+  if (place && place.wider) {
+    const any = products.some((p) => types.includes(p.type) && place.test(p.area ?? "", otherText(p)));
+    if (!any) {
+      placeTest = place.wider.test;
+      f.area = `${place.wider.label} (không có khách sạn đúng ${place.label})`;
+    }
+  }
+  // mức khớp tên: 2 = đủ mọi chữ, 1 = quá nửa số chữ, 0 = không
+  const nameLevel = (p: Product) => {
+    if (!nameWords.length) return 0;
+    const t = placeText(p);
+    const n = nameWords.filter((w) => hasPhrase(t, w)).length;
+    return n === nameWords.length ? 2 : n * 2 > nameWords.length ? 1 : 0;
+  };
   const budget = f.budget ?? null;
   const nights = f.date && f.checkout ? Math.max(1, Math.round((Date.parse(f.checkout) - Date.parse(f.date)) / 86400000)) : 1;
 
@@ -113,7 +140,8 @@ export async function POST(req: NextRequest) {
   for (const p of products) {
     if (!types.includes(p.type)) continue;
     if (f.star && (p.star ?? 0) < f.star) continue;
-    if (areaN && !normalize(`${p.area} ${p.sub_region ?? ""} ${p.address ?? ""}`).includes(areaN)) continue;
+    if (placeTest && !placeTest(p.area ?? "", otherText(p))) continue;
+    if (areaN && !hasPhrase(placeText(p), areaN)) continue;
 
     const own = [...(ratesBy.get(p.id) ?? [])].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.price - b.price);
     const list = own.length ? own : [fallbackRate(p)].filter((x): x is HotelRate => !!x);
@@ -142,15 +170,25 @@ export async function POST(req: NextRequest) {
     if (f.priceFrom && bn < f.priceFrom) continue;
     if (f.priceTo && bn > f.priceTo) continue;
 
-    let score = 0;
-    if (nameN && normalize(p.product_name).includes(nameN)) score += 100;
-    else if (nameN && nameN.split(" ").some((w) => w.length >= 3 && normalize(p.product_name).includes(w))) score += 30;
+    const lv = nameLevel(p);
+    let score = lv * 50;
+    if (nameN && placeNorm(p.product_name).includes(nameN)) score += 100;
     if (pool.length) score += 10;
     const group: ResortResult["group"] = !budget ? "all" : bn <= budget * 1.1 ? "fit" : "above";
     const diff = budget ? Math.abs(bn - budget) : bn;
 
     const cheapest = candidates.reduce((a, b) => ((b.nightly as number) < (a.nightly as number) ? b : a));
     scored.push({ product: p, rates: withQuote, bestRateId: best.id, bestNightly: bn, group, images: [], score, diff, cheapest: cheapest.nightly as number, cheapestRoom: cheapest.room_type });
+  }
+
+  // Có gõ tên mà có khách sạn khớp tên → chỉ hiện các khách sạn khớp (không hiện lan man)
+  if (nameWords.length) {
+    const top = Math.max(0, ...scored.map((x) => nameLevel(x.product)));
+    if (top > 0) {
+      const keep = scored.filter((x) => nameLevel(x.product) === top);
+      scored.length = 0;
+      scored.push(...keep);
+    }
   }
 
   // GỘP ĐỐI TÁC: cùng khách sạn → giữ bên RẺ NHẤT, các bên đắt hơn ẩn vào "đối tác khác"
