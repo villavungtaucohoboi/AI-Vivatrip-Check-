@@ -43,6 +43,8 @@ interface Room {
   key: string;
   id?: string;
   room_type: string;
+  /** Gói giá: Ăn sáng / 2 bữa (HB) / All Inclusive / Commit… (trống = giá phòng chung) */
+  rate_plan: string;
   area_m2: number | null;
   bed: string;
   capacity: number | null;
@@ -119,6 +121,7 @@ function fromProduct(p: Product, rates: HotelRate[]): Block {
       key: nk(),
       id: r.id,
       room_type: r.room_type,
+      rate_plan: r.rate_plan ?? "",
       area_m2: r.area_m2 ?? null,
       bed: r.bed ?? "",
       capacity: r.capacity,
@@ -146,6 +149,7 @@ function emptyBlock(type: ResortType = "resort"): Block {
 const emptyRoom = (): Room => ({
   key: nk(),
   room_type: "",
+  rate_plan: "",
   area_m2: null,
   bed: "",
   capacity: 2,
@@ -159,14 +163,16 @@ const snap = (b: Block) => JSON.stringify({ ...b, key: undefined, rooms: b.rooms
 
 /** Kết quả AI → khối resort (giữ id hạng phòng cũ trùng tên). */
 function applyAI(b: Block, ai: AIRes): Block {
-  const byName = new Map(b.rooms.map((r) => [plain(r.room_type), r]));
+  const byName = new Map(b.rooms.map((r) => [plain(`${r.room_type}|${r.rate_plan}`), r]));
   const rooms: Room[] = ai.rooms.map((r) => {
-    const old = byName.get(plain(r.room_type));
-    if (old) byName.delete(plain(r.room_type));
+    const nameKey = plain(`${r.room_type}|${r.rate_plan ?? ""}`);
+    const old = byName.get(nameKey);
+    if (old) byName.delete(nameKey);
     return {
       key: old?.key ?? nk(),
       id: old?.id,
       room_type: r.room_type,
+      rate_plan: r.rate_plan ?? old?.rate_plan ?? "",
       area_m2: r.area_m2 ?? old?.area_m2 ?? null,
       bed: r.bed ?? old?.bed ?? "",
       capacity: r.capacity ?? old?.capacity ?? null,
@@ -664,7 +670,13 @@ export function ResortPricingSheet({
                             value={r.room_type}
                             onChange={(e) => updRoom(b.key, r.key, { room_type: e.target.value })}
                             placeholder="Tên hạng phòng"
-                            className="h-9 w-full bg-transparent px-1.5 font-semibold outline-none focus:bg-teal-light"
+                            className="h-8 w-full bg-transparent px-1.5 font-semibold outline-none focus:bg-teal-light"
+                          />
+                          <input
+                            value={r.rate_plan}
+                            onChange={(e) => updRoom(b.key, r.key, { rate_plan: e.target.value })}
+                            placeholder="Gói: Ăn sáng / 2 bữa…"
+                            className="h-6 w-full bg-transparent px-1.5 text-[11px] text-amber-800 outline-none placeholder:text-ink-muted/50 focus:bg-amber-50"
                           />
                         </td>
                         <td>
@@ -812,6 +824,7 @@ interface AIRes {
   weekend_nights: number[];
   rooms: {
     room_type: string;
+    rate_plan?: string;
     area_m2: number | null;
     bed: string | null;
     capacity: number | null;

@@ -122,6 +122,9 @@ export function ResortGridCard({
                 <Star className="h-3 w-3 shrink-0 fill-amber-400 text-amber-400" />
                 <span className="truncate">{best.room_type}</span>
               </p>
+              {best.rate_plan && (
+                <p className="truncate text-[10px] font-semibold text-amber-700 lg:text-[11px]">🍽 {best.rate_plan}</p>
+              )}
               <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[10px] text-ink-muted lg:text-[11px]">
                 {best.capacity != null && (
                   <span className="flex items-center gap-0.5">

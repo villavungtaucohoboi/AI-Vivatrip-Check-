@@ -23,6 +23,10 @@ export function ResortExcelImport({ initialFile }: { initialFile?: File } = {}) 
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
+  // KS cũ của đối tác không còn trong file mới → xoá cho khỏi trùng / chồng chéo
+  const [prune, setPrune] = useState<{ id: string; name: string; source: string }[]>([]);
+  const [doPrune, setDoPrune] = useState(true);
+  const matchedIds = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (initialFile) onFile(initialFile);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -60,6 +64,8 @@ export function ResortExcelImport({ initialFile }: { initialFile?: File } = {}) 
       body: JSON.stringify({ dryRun: true, resorts: hs.map((h) => withSource(h, src)) }),
     });
     const j = await res.json().catch(() => ({}));
+    setPrune(j.prune ?? []);
+    matchedIds.current = new Set((j.matches ?? []).map((m: { id: string | null }) => m.id).filter(Boolean));
     if (j.matches) {
       setStatus(
         Object.fromEntries(
@@ -92,6 +98,7 @@ export function ResortExcelImport({ initialFile }: { initialFile?: File } = {}) 
           const n = { ...s };
           for (const r of j.results as { key: string; id?: string; status: Status["state"]; error?: string }[]) {
             n[r.key] = { state: r.status, id: r.id, error: r.error };
+            if (r.id) matchedIds.current.add(r.id);
             if (r.status !== "failed") ok++;
           }
           return n;
@@ -102,8 +109,21 @@ export function ResortExcelImport({ initialFile }: { initialFile?: File } = {}) 
       }
       setProgress({ done: Math.min(i + BATCH, list.length), total: list.length });
     }
+    let deleted = 0;
+    if (doPrune && prune.length) {
+      const sources = [...new Set(hotels.map((h) => withSource(h, source).info.price_source).filter(Boolean))] as string[];
+      const res = await fetch("/api/admin/bulk/resort-import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prune: { sources, keepIds: [...matchedIds.current] } }),
+      });
+      const j = await res.json().catch(() => ({}));
+      deleted = j.deleted ?? 0;
+      if (!res.ok) toast.error(`Không xoá được KS cũ: ${j.error ?? "lỗi"}`);
+      setPrune([]);
+    }
     setBusy(false);
-    toast.success(`Đã nhập ${ok}/${list.length} khách sạn.`);
+    toast.success(`Đã nhập ${ok}/${list.length} khách sạn${deleted ? ` · đã xoá ${deleted} KS cũ trùng/không còn trong file` : ""}.`);
   }
 
   const toggle = (key: string) =>
@@ -241,6 +261,16 @@ export function ResortExcelImport({ initialFile }: { initialFile?: File } = {}) 
               </tbody>
             </table>
           </div>
+
+          {prune.length > 0 && (
+            <label className="flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-[12.5px] text-amber-900">
+              <input type="checkbox" checked={doPrune} onChange={(e) => setDoPrune(e.target.checked)} className="mt-0.5 h-4 w-4 accent-teal" />
+              <span>
+                <b>Xoá {prune.length} khách sạn cũ của đối tác này không còn trong file</b> (bản trùng tên cũ / đã bỏ) — tránh hiện trùng khi tìm kiếm:{" "}
+                <span className="text-amber-800/80">{prune.slice(0, 12).map((p) => p.name).join(" · ")}{prune.length > 12 ? ` … +${prune.length - 12}` : ""}</span>
+              </span>
+            </label>
+          )}
 
           <div className="sticky bottom-3 flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-white/95 p-3 shadow-float backdrop-blur">
             <button

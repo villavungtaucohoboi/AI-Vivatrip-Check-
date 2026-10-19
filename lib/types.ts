@@ -111,6 +111,8 @@ export interface HotelRate {
   id: string;
   product_id: string;
   room_type: string;
+  /** Gói giá: Ăn sáng / 2 bữa (HB) / All Inclusive… (null = giá phòng chung) */
+  rate_plan?: string | null;
   price: number;
   capacity: number | null;
   breakfast: boolean;

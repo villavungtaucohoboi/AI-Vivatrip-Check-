@@ -6,6 +6,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 export interface RoomIn {
   id?: string;
   room_type: string;
+  rate_plan?: string | null;
   area_m2?: number | null;
   bed?: string | null;
   capacity?: number | null;
@@ -43,7 +44,7 @@ export const n = (v: unknown) => (v == null || v === "" || !Number.isFinite(Numb
 const AMENITY_KEYS = ["pool", "near_beach", "sea_view", "near_lake", "karaoke", "bbq", "pickleball"];
 export const slug = (s: string) =>
   s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/gi, "d").replace(/[^a-zA-Z0-9]+/g, "").toUpperCase().slice(0, 10) || "RS";
-const colErr = (m: string) => (/column|schema cache|check constraint/i.test(m) ? "Chưa chạy SQL 0026 → 0029 trên Supabase." : m);
+const colErr = (m: string) => (/column|schema cache|check constraint/i.test(m) ? "Chưa chạy SQL 0026 → 0031 trên Supabase." : m);
 
 
 /** Trả về id resort (tạo mới nếu chưa có id). Lỗi → throw Error tiếng Việt. */
@@ -101,6 +102,7 @@ export async function saveResort(supabase: SupabaseClient, r: ResortIn, opts: { 
         row: {
           product_id: id,
           room_type: room.room_type.trim(),
+          rate_plan: room.rate_plan?.trim() || null,
           area_m2: n(room.area_m2),
           bed: room.bed?.trim() || null,
           capacity: n(room.capacity),

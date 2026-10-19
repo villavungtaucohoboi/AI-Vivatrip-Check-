@@ -30,7 +30,12 @@ export function resortQuoteText(product: Product, rates: HotelRate[]): string {
     am.forEach((a) => lines.push(`✅ ${a}`));
     if (product.perks?.trim()) lines.push(...product.perks.trim().split("\n").filter((l) => !am.some((a) => l.includes(a))));
   }
-  const rooms = rates.filter((r) => r.room_type && r.room_type !== "Giá chung");
+  const seenRoom = new Set<string>();
+  const rooms = rates.filter((r) => {
+    if (!r.room_type || r.room_type === "Giá chung" || seenRoom.has(r.room_type)) return false;
+    seenRoom.add(r.room_type);
+    return true;
+  });
   if (rooms.length) {
     lines.push("", "🛏️ HẠNG PHÒNG");
     for (const r of rooms) {
@@ -60,7 +65,7 @@ export function resortPriceQuoteText(
   for (const r of rows) {
     if (r.avg == null) continue;
     const meta = roomMeta(r.room);
-    lines.push(`▸ ${r.room.room_type}${meta.length ? ` (${meta.join(", ")})` : ""}`);
+    lines.push(`▸ ${r.room.room_type}${r.room.rate_plan ? ` – ${r.room.rate_plan}` : ""}${meta.length ? ` (${meta.join(", ")})` : ""}`);
     lines.push(`   ${vnd(r.avg)}/đêm${nights > 1 && r.total != null ? ` · ${nights} đêm: ${vnd(r.total)}` : ""}`);
   }
   if (product.surcharge_note?.trim()) lines.push("", "➕ PHỤ THU", product.surcharge_note.trim());

@@ -16,11 +16,32 @@ const norm = (s: string) =>
   s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/gi, "d").toLowerCase().replace(/[^a-z0-9]+/g, "");
 
 export async function POST(req: NextRequest) {
-  const body = (await req.json().catch(() => ({}))) as { resorts?: ResortIn[]; dryRun?: boolean };
+  const body = (await req.json().catch(() => ({}))) as {
+    resorts?: ResortIn[];
+    dryRun?: boolean;
+    /** Dọn KS cũ của đối tác không còn trong file mới (gọi sau khi nhập xong) */
+    prune?: { sources: string[]; keepIds: string[] };
+  };
+  const supabase = await createClient();
+
+  if (body.prune) {
+    const srcs = new Set(body.prune.sources.map(sourceKey).filter(Boolean));
+    const keep = new Set(body.prune.keepIds);
+    const { data: ex, error: e1 } = await supabase.from("products").select("id, price_source").in("type", ["resort", "hotel", "homestay"]);
+    if (e1) return NextResponse.json({ error: e1.message }, { status: 500 });
+    const ids = (ex ?? []).filter((p) => srcs.has(sourceKey(p.price_source as string)) && !keep.has(p.id as string)).map((p) => p.id as string);
+    for (let i = 0; i < ids.length; i += 100) {
+      const { error: e2 } = await supabase.from("products").delete().in("id", ids.slice(i, i + 100));
+      if (e2) return NextResponse.json({ error: e2.message }, { status: 500 });
+    }
+    revalidatePath("/search-resort");
+    revalidateTag("products");
+    return NextResponse.json({ deleted: ids.length });
+  }
+
   const resorts = body.resorts ?? [];
   if (!resorts.length) return NextResponse.json({ error: "File không có khách sạn nào." }, { status: 400 });
 
-  const supabase = await createClient();
   const { data: existing, error } = await supabase
     .from("products")
     .select("*")
@@ -33,9 +54,10 @@ export async function POST(req: NextRequest) {
     const src = sourceKey(r.info.price_source);
     const code = r.info.product_code?.trim().toUpperCase() ?? "";
     const gk = groupKeyOf({ product_name: r.info.product_name });
-    const same = list.find(
-      (p) => sourceKey(p.price_source) === src && ((code && String(p.product_code ?? "").toUpperCase() === code) || groupKeyOf(p) === gk)
-    );
+    const sameSrc = list.filter((p) => sourceKey(p.price_source) === src);
+    const same =
+      (code && sameSrc.find((p) => String(p.product_code ?? "").toUpperCase() === code)) ||
+      sameSrc.find((p) => groupKeyOf(p) === gk || (!!r.info.group_key && groupKeyOf(p) === groupKeyOf({ product_name: r.info.group_key })));
     if (same) return { id: same.id };
     const other = list.find((p) => groupKeyOf(p) === gk || (code && String(p.product_code ?? "").toUpperCase() === code));
     // Mã đã bị bên khác dùng → thêm hậu tố đối tác
@@ -50,12 +72,17 @@ export async function POST(req: NextRequest) {
 
   // Xem trước: chỉ báo khách sạn nào sẽ cập nhật / tạo mới
   if (body.dryRun) {
-    return NextResponse.json({
-      matches: resorts.map((r) => {
-        const m = match(r);
-        return { key: r.clientKey, id: m.id ?? null, partnerOf: m.partnerOf ?? null };
-      }),
+    const matches = resorts.map((r) => {
+      const m = match(r);
+      return { key: r.clientKey, id: m.id ?? null, partnerOf: m.partnerOf ?? null };
     });
+    // KS cũ của (các) đối tác trong file mà file mới không còn → đề xuất xoá cho khỏi trùng
+    const srcs = new Set(resorts.map((r) => sourceKey(r.info.price_source)).filter(Boolean));
+    const used = new Set(matches.map((m) => m.id).filter(Boolean));
+    const prune = list
+      .filter((p) => srcs.has(sourceKey(p.price_source)) && !used.has(p.id))
+      .map((p) => ({ id: p.id, name: p.product_name, source: sourceLabel(p.price_source) }));
+    return NextResponse.json({ matches, prune });
   }
 
   const results: { key: string; id?: string; status: "created" | "updated" | "failed"; error?: string }[] = [];

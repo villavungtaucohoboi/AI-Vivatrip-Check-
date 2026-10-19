@@ -38,6 +38,7 @@ export const PERIOD_COLS = ["Mã KS *", "GĐ số *", "Tên giai đoạn *", "T�
 export const ROOM_COLS = [
   "Mã KS *",
   "Hạng phòng *",
+  "Gói giá (Ăn sáng / 2 bữa / All Inclusive…)",
   "Diện tích m²",
   "Giường",
   "Người lớn",
@@ -187,6 +188,7 @@ export function parseResortWorkbook(buf: ArrayBuffer, today = iso(new Date())): 
         if (!Object.keys(pp).length) warnings.push(`Bỏ qua "${str(r["Hạng phòng *"])}" vì chưa có giá.`);
         return {
           room_type: str(r["Hạng phòng *"]),
+          rate_plan: str(r["Gói giá (Ăn sáng / 2 bữa / All Inclusive…)"]) || null,
           area_m2: num(r["Diện tích m²"]),
           bed: str(r["Giường"]) || null,
           capacity: num(r["Người lớn"]),
@@ -260,7 +262,7 @@ export function downloadResortTemplate() {
   ]);
   const room = XLSX.utils.aoa_to_sheet([
     ROOM_COLS,
-    ["SP-VIDU", "Deluxe Double", 28, "1 giường đôi", 2, 1, "x", 800000, "", 1500000, 1800000, 2000000, 2300000, 2600000, ""],
+    ["SP-VIDU", "Deluxe Double", "Ăn sáng", 28, "1 giường đôi", 2, 1, "x", 800000, "", 1500000, 1800000, 2000000, 2300000, 2600000, ""],
   ]);
   const guide = XLSX.utils.aoa_to_sheet([
     ["HƯỚNG DẪN"],

@@ -53,7 +53,7 @@ export function SeasonBar({ quote, nights }: { quote: StayQuote | null; nights: 
 
 export function ResortRatesTable({
   product,
-  rates,
+  rates: allRates,
   holidays,
   checkin,
   checkout,
@@ -69,6 +69,11 @@ export function ResortRatesTable({
   defaultFull?: boolean;
 }) {
   const [full, setFull] = useState(defaultFull);
+  // GÓI GIÁ: cùng hạng phòng nhiều gói (Ăn sáng / 2 bữa / All Inclusive…) → chọn gói để xem
+  const plans = [...new Set(allRates.map((r) => r.rate_plan?.trim() || ""))];
+  const bestPlan = allRates.find((r) => r.id === bestRateId)?.rate_plan?.trim() || plans[0] || "";
+  const [plan, setPlan] = useState<string>(bestPlan);
+  const rates = plans.length > 1 ? allRates.filter((r) => (r.rate_plan?.trim() || "") === plan) : allRates;
   const quotes = new Map(rates.map((r) => [r.id, checkin ? quoteStay(r, product, holidays, checkin, checkout) : null]));
   const first = [...quotes.values()][0] ?? null;
   const nights = first?.nights.length ?? 1;
@@ -82,6 +87,28 @@ export function ResortRatesTable({
   return (
     <div className="space-y-2">
       <SeasonBar quote={first} nights={nights} />
+
+      {plans.length > 1 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[11px] font-extrabold uppercase tracking-wide text-ink-muted">Gói giá:</span>
+          {plans.map((p) => {
+            const n = allRates.filter((r) => (r.rate_plan?.trim() || "") === p).length;
+            return (
+              <button
+                key={p || "_"}
+                type="button"
+                onClick={() => setPlan(p)}
+                className={cn(
+                  "rounded-full px-2.5 py-1 text-[12px] font-bold",
+                  plan === p ? "bg-amber-500 text-white" : "border border-amber-200 bg-amber-50 text-amber-800"
+                )}
+              >
+                {p || "Giá phòng"} <span className="opacity-70">({n})</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {!full ? (
         <div className="divide-y divide-border overflow-hidden rounded-xl border border-border">

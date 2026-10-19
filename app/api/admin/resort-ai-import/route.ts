@@ -30,6 +30,7 @@ const PROMPT = `Bạn là trợ lý nhập liệu cho công ty du lịch VivaTri
   "rooms": [
     {
       "room_type": "tên hạng phòng",
+      "rate_plan": "gói giá, VD 'Ăn sáng', 'Không ăn sáng', '2 bữa (HB)', '3 bữa (FB)', 'All Inclusive', 'Commit 2 bữa' — CÙNG 1 hạng phòng có nhiều gói giá thì ghi THÀNH NHIỀU DÒNG, mỗi dòng 1 gói",
       "area_m2": số hoặc null,
       "bed": "loại giường" hoặc null,
       "capacity": số NGƯỜI LỚN tối đa/phòng hoặc null,
@@ -101,6 +102,7 @@ export async function POST(req: NextRequest) {
       }
       return {
         room_type: String(r.room_type ?? "").trim(),
+        rate_plan: String(r.rate_plan ?? "").trim(),
         area_m2: num(r.area_m2),
         bed: r.bed ? String(r.bed) : null,
         capacity: num(r.capacity),
