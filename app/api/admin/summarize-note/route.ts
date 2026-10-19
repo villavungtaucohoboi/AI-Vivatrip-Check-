@@ -26,7 +26,10 @@ const PROMPT = `Bạn là trợ lý viết nội dung cho đội sale du lịch 
 Quy tắc:
 - Dưới mỗi tiêu đề, mỗi dòng 1 ý, BẮT ĐẦU bằng 1 emoji đúng nghĩa (🛏️ phòng ngủ, 🛖 bungalow, 🚿 WC, 🍳 bếp, 🛋️ phòng khách, 🏊 hồ bơi, 🎤 karaoke, 🍖 BBQ, 🎱 bida, ⚽ bi lắc, 🧹 dọn dẹp, ⏱️ thêm giờ, 🍽️ đồ ăn, 👥 khách, 👶 trẻ em, 💵 phụ thu, ⛰️ núi, 🌊 hồ/biển, 🛒 tạp hoá, 🕑 giờ, 🧾 cọc/huỷ, 🐾 thú cưng, ⚠️ lưu ý).
 - Mỗi dòng tối đa 15 chữ, rõ ràng, tươi vui, CHỈ dùng thông tin có trong bài, KHÔNG bịa.
-- Đúng mục: tiện ích miễn phí và dịch vụ tính phí phải tách riêng theo bài gốc.
+- Đúng mục: tiện ích miễn phí và dịch vụ tính phí phải tách riêng theo bài gốc (thứ gì bài ghi "free/miễn phí" → TIỆN ÍCH MIỄN PHÍ; có giá/phí → DỊCH VỤ TÍNH PHÍ).
+- Đặt mỗi ý vào ĐÚNG mục theo nghĩa: bể bơi, xích đu, xe đạp, thuyền SUP → TIỆN ÍCH (dù câu có chữ "trẻ em", "người lớn", "check in"); "tiêu chuẩn khách sạn 5 sao" KHÔNG phải sức chứa; mục NHẬN – TRẢ PHÒNG chỉ ghi giờ nhận/trả phòng.
+- Số khách tiêu chuẩn lấy từ câu "tiêu chuẩn X người/NL/khách", không lấy từ số giường hay số sao.
+- Gộp các ý trùng nhau (VD karaoke nhắc 2 lần → 1 dòng). Không cắt câu giữa chừng.
 - Bỏ lời chào, câu tả cảm xúc chung chung, hashtag, số điện thoại, link, "inbox/liên hệ".
 - Giữ nguyên các con số (phòng, giường, khách, giá, giờ, km, m2).
 - Các mục cách nhau 1 dòng trống. Chỉ trả về nội dung theo khung, không thêm lời dẫn.`;
@@ -36,7 +39,7 @@ export async function POST(req: NextRequest) {
   const raw = (text ?? "").trim();
   if (!raw) return NextResponse.json({ error: "Chưa có nội dung để rút gọn." }, { status: 400 });
 
-  const ai = await callAI(PROMPT, raw, 800);
+  const ai = await callAI(PROMPT, raw, 2500);
   if (ai.text) return NextResponse.json({ summary: cleanAIOutput(ai.text), engine: "ai" });
 
   const summary = summarizeNoteBasic(raw);

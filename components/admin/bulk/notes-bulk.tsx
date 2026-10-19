@@ -78,7 +78,13 @@ export function NotesBulk({ initial }: { initial: NoteRow[] }) {
     const source = r.original ?? r.note;
     patch(r.id, { busy: true });
     try {
-      const { summary, engine, aiError } = await summarize(source);
+      let out = await summarize(source);
+      // AI miễn phí hết lượt trong phút → đợi rồi thử lại (tối đa 2 lần) thay vì dùng bản lọc tự động
+      for (let i = 0; i < 2 && out.engine === "basic" && /hết lượt|429|quá tải|503/i.test(out.aiError ?? "") && !cancelRef.current; i++) {
+        await new Promise((ok) => setTimeout(ok, 25000));
+        out = await summarize(source);
+      }
+      const { summary, engine, aiError } = out;
       if (engine === "basic" && aiError) lastAiError.current = aiError;
       patch(r.id, { draft: summary, engine, busy: false, pendingOriginal: r.original == null ? r.note : null });
       return true;
@@ -243,7 +249,11 @@ export function NotesBulk({ initial }: { initial: NoteRow[] }) {
                     {r.code ? ` · ${r.code}` : ""} · {r.note.length} → <b className={changed ? "text-sand-dark" : ""}>{r.draft.length}</b> ký tự
                     {r.original != null && <span className="ml-1 rounded bg-teal-light px-1 font-semibold text-teal-dark">đã rút gọn</span>}
                     {changed && <span className="ml-1 rounded bg-sand-light px-1 font-semibold text-sand-dark">chưa lưu</span>}
-                    {r.engine && changed && <span className="ml-1 text-[10.5px]">({r.engine === "ai" ? "AI" : "lọc miễn phí"})</span>}
+                    {r.engine && changed && (
+                      <span className={r.engine === "ai" ? "ml-1 text-[10.5px]" : "ml-1 rounded bg-amber-100 px-1 text-[10.5px] font-bold text-amber-800"}>
+                        {r.engine === "ai" ? "(AI)" : "⚠ bộ lọc tự động – AI chưa chạy, xem kỹ / bấm Rút gọn lại"}
+                      </span>
+                    )}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-1.5">

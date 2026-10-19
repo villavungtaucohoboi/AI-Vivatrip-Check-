@@ -87,19 +87,28 @@ export async function callAI(
 
   const gemini = process.env.GEMINI_API_KEY;
   if (gemini) {
-    const body = JSON.stringify({
-      contents: [{ role: "user", parts: [...imgs.map((im) => ({ inline_data: { mime_type: im.mime, data: im.data } })), { text: content }] }],
-      generationConfig: { maxOutputTokens: maxTokens, temperature: 0.1, ...(opts.json ? { responseMimeType: "application/json" } : {}) },
-    });
+    // Model Flash mới "suy nghĩ" trước khi trả lời — phần nghĩ ăn hết maxOutputTokens → câu trả lời rỗng/cụt.
+    // Tắt suy nghĩ (thinkingBudget 0); model nào không nhận tham số này thì tự gửi lại không có nó.
+    let noThinking = true;
+    const makeBody = () =>
+      JSON.stringify({
+        contents: [{ role: "user", parts: [...imgs.map((im) => ({ inline_data: { mime_type: im.mime, data: im.data } })), { text: content }] }],
+        generationConfig: {
+          maxOutputTokens: maxTokens,
+          temperature: 0.1,
+          ...(opts.json ? { responseMimeType: "application/json" } : {}),
+          ...(noThinking ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
+        },
+      });
     try {
       // Thử model đã cài / đã dò được; tên model bị Google đổi (404) → tự dò model Flash đang có rồi thử lại
       const tried = new Set<string>();
       let model = cachedGeminiModel || process.env.GEMINI_MODEL || "gemini-flash-latest";
-      for (let attempt = 0; attempt < 3; attempt++) {
+      for (let attempt = 0; attempt < 4; attempt++) {
         tried.add(model);
         const res = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(gemini)}`,
-          { method: "POST", headers: { "content-type": "application/json" }, body }
+          { method: "POST", headers: { "content-type": "application/json" }, body: makeBody() }
         );
         if (res.ok) {
           cachedGeminiModel = model;
@@ -110,6 +119,10 @@ export async function callAI(
           break;
         }
         const detail = await res.text().catch(() => "");
+        if (res.status === 400 && noThinking && /thinking/i.test(detail)) {
+          noThinking = false;
+          continue;
+        }
         if (res.status === 404) {
           const next = await discoverGeminiModel(gemini, tried);
           if (next) {
