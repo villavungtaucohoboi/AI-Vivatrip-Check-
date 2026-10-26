@@ -1,7 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
-    formats: ["image/avif", "image/webp"],
+    // TẮT tối ưu ảnh của Vercel: gói Hobby chỉ có 5.000 lượt/tháng, vượt là bị khoá web.
+    // Ảnh đã được nén khi up lên (lib/compress-image.ts) nên hiển thị thẳng từ Supabase vẫn nhẹ.
+    unoptimized: true,
     remotePatterns: [
       {
         protocol: "https",
