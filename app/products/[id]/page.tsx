@@ -22,7 +22,6 @@ import { ProductGallery } from "@/components/product-gallery";
 import { CopyButton } from "@/components/copy-button";
 import { DownloadImagesButton } from "@/components/download-images-button";
 import { ResortDetailPanel } from "@/components/resort/resort-detail-panel";
-import { getAllProducts, getAllRates } from "@/lib/catalog";
 import { groupKeyOf } from "@/lib/hotel-group";
 import { VillaPricingTable } from "@/components/villa-pricing-table";
 import { Badge } from "@/components/ui/badge";
@@ -64,25 +63,19 @@ export default async function ProductDetailPage({
   const { date, checkout } = await searchParams;
   const supabase = createPublicClient();
 
-  const { data: productRow } = await supabase.from("products").select("*").eq("id", id).single();
+  // Chạy song song mọi truy vấn (trước đây chờ lấy xong sản phẩm mới lấy ảnh/giá → chậm)
+  const [{ data: productRow }, { data: images }, { data: rates }, { data: holidays }] = await Promise.all([
+    supabase.from("products").select("*").eq("id", id).single(),
+    supabase.from("product_images").select("*").eq("product_id", id).order("sort_order", { ascending: true }),
+    supabase.from("hotel_rates").select("*").eq("product_id", id).order("sort_order").order("price"),
+    supabase.from("holidays").select("*"),
+  ]);
 
   if (!productRow) notFound();
   const product = productRow as Product;
   const isVilla = product.type === "villa";
 
   const backHref = isVilla ? "/search" : "/search-resort";
-
-  const [{ data: images }, { data: rates }, { data: holidays }] = await Promise.all([
-    supabase
-      .from("product_images")
-      .select("*")
-      .eq("product_id", id)
-      .order("sort_order", { ascending: true }),
-    !isVilla
-      ? supabase.from("hotel_rates").select("*").eq("product_id", id).order("sort_order").order("price")
-      : Promise.resolve({ data: [] as HotelRate[] }),
-    supabase.from("holidays").select("*"),
-  ]);
 
   const gallery: ProductImage[] = images?.length
     ? images
@@ -99,11 +92,20 @@ export default async function ProductDetailPage({
   // Cùng khách sạn ở các ĐỐI TÁC khác (để so giá / chốt thêm)
   let partners: { product: Product; rates: HotelRate[] }[] = [];
   if (!isVilla) {
-    const [all, allRates] = await Promise.all([getAllProducts(), getAllRates()]);
+    // Chỉ lấy khách sạn CÙNG KHU VỰC (không tải cả kho sản phẩm + bảng giá như trước)
+    const [{ data: sameArea }, { data: sameKey }] = await Promise.all([
+      supabase.from("products").select("*").eq("area", product.area).neq("type", "villa").neq("id", product.id),
+      product.group_key
+        ? supabase.from("products").select("*").eq("group_key", product.group_key).neq("id", product.id)
+        : Promise.resolve({ data: [] as Product[] }),
+    ]);
     const gk = groupKeyOf(product);
-    partners = all
-      .filter((p) => p.id !== product.id && p.type !== "villa" && groupKeyOf(p) === gk)
-      .map((p) => ({ product: p, rates: allRates.filter((r) => r.product_id === p.id) }));
+    const byId = new Map([...((sameArea ?? []) as Product[]), ...((sameKey ?? []) as Product[])].map((p) => [p.id, p]));
+    const sib = [...byId.values()].filter((p) => p.type !== "villa" && groupKeyOf(p) === gk);
+    if (sib.length) {
+      const { data: sibRates } = await supabase.from("hotel_rates").select("*").in("product_id", sib.map((p) => p.id));
+      partners = sib.map((p) => ({ product: p, rates: ((sibRates ?? []) as HotelRate[]).filter((r) => r.product_id === p.id) }));
+    }
   }
 
   if (!isVilla) {

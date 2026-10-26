@@ -15,6 +15,33 @@ import type { ProductType, SearchFilters } from "@/lib/types";
 import type { ResortResult, ResortSearchResponse } from "@/app/api/search-resort/route";
 
 const PAGE_SIZE = 10;
+// GIỮ KẾT QUẢ TÌM KIẾM khi vào xem 1 khách sạn rồi bấm Quay lại (giữ câu tìm, bộ lọc, danh sách, vị trí cuộn)
+const STORAGE_KEY = "vivatrip-resort-search-v1";
+const KEEP_MS = 6 * 3600e3;
+interface Saved {
+  at: number;
+  query: string;
+  typeChip: ProductType | "";
+  area: string;
+  checkin: string;
+  checkout: string;
+  guests: string;
+  budget: string;
+  star: number;
+  showFilters: boolean;
+  data: ResortSearchResponse | null;
+  results: ResortResult[];
+  scrollY: number;
+}
+function loadSaved(): Saved | null {
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY);
+    const s = raw ? (JSON.parse(raw) as Saved) : null;
+    return s && Date.now() - s.at < KEEP_MS ? s : null;
+  } catch {
+    return null;
+  }
+}
 const QUICK = ["Khách sạn Hạ Long phòng 2 người tầm 1tr2/đêm 10-12/11", "Resort Đại Lải 4 khách cuối tuần"];
 
 export function ResortSearchExperience({ areas }: { areas: string[] }) {
@@ -61,13 +88,97 @@ export function ResortSearchExperience({ areas }: { areas: string[] }) {
     [query, typeChip, area, checkin, checkout, guests, budget, star, results.length]
   );
 
-  // Mở trang là hiện luôn danh sách (rẻ → đắt), không phải gõ mới thấy
+  // Mở trang: có kết quả cũ (vừa bấm Quay lại) → hiện lại y nguyên + cuộn về chỗ cũ;
+  // chưa có → hiện luôn danh sách (rẻ → đắt), không phải gõ mới thấy
   const didInit = useRef(false);
+  const restored = useRef(false);
+  const scrollYRef = useRef(0);
   useEffect(() => {
     if (didInit.current) return;
     didInit.current = true;
+    const sv = loadSaved();
+    if (sv?.data) {
+      restored.current = true;
+      setQuery(sv.query);
+      setTypeChip(sv.typeChip);
+      setArea(sv.area);
+      setCheckin(sv.checkin);
+      setCheckout(sv.checkout);
+      setGuests(sv.guests);
+      setBudget(sv.budget);
+      setStar(sv.star);
+      setShowFilters(sv.showFilters);
+      setData(sv.data);
+      setResults(sv.results);
+      scrollYRef.current = sv.scrollY;
+      // đợi danh sách vẽ xong rồi mới cuộn
+      let n = 0;
+      const tick = () => {
+        if (document.body.scrollHeight >= sv.scrollY + window.innerHeight * 0.5 || n++ > 30) window.scrollTo({ top: sv.scrollY, behavior: "instant" as ScrollBehavior });
+        else requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+      return;
+    }
     runSearch();
   }, [runSearch]);
+
+  // Lưu lại mỗi khi kết quả / bộ lọc thay đổi
+  useEffect(() => {
+    if (!didInit.current || !data) return;
+    try {
+      const sv: Saved = { at: Date.now(), query, typeChip, area, checkin, checkout, guests, budget, star, showFilters, data, results, scrollY: scrollYRef.current };
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(sv));
+    } catch {
+      /* bộ nhớ trình duyệt đầy / bị chặn → bỏ qua */
+    }
+  }, [query, typeChip, area, checkin, checkout, guests, budget, star, showFilters, data, results]);
+
+  // Nhớ vị trí cuộn (để quay lại đúng chỗ đang xem)
+  useEffect(() => {
+    let t: ReturnType<typeof setTimeout> | undefined;
+    let leaving = false;
+    const save = (y: number) => {
+      try {
+        const raw = sessionStorage.getItem(STORAGE_KEY);
+        if (raw) sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ ...(JSON.parse(raw) as Saved), scrollY: y, at: Date.now() }));
+      } catch {
+        /* bỏ qua */
+      }
+    };
+    // Bấm vào 1 khách sạn → chốt vị trí cuộn NGAY (trang mới sẽ tự cuộn lên đầu, không được ghi đè)
+    const onClick = (e: MouseEvent) => {
+      const a = (e.target as HTMLElement | null)?.closest?.("a[href]");
+      if (a && a.getAttribute("href")?.startsWith("/")) {
+        leaving = true;
+        scrollYRef.current = window.scrollY;
+        save(window.scrollY);
+      }
+    };
+    document.addEventListener("click", onClick, true);
+    const onScroll = () => {
+      if (leaving) return;
+      scrollYRef.current = window.scrollY;
+      clearTimeout(t);
+      t = setTimeout(() => {
+        try {
+          const raw = sessionStorage.getItem(STORAGE_KEY);
+          if (!raw) return;
+          const sv = JSON.parse(raw) as Saved;
+          sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ ...sv, scrollY: scrollYRef.current, at: Date.now() }));
+        } catch {
+          /* bỏ qua */
+        }
+      }, 150);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener("scroll", onScroll);
+      document.removeEventListener("click", onClick, true);
+      if (!leaving) save(scrollYRef.current);
+    };
+  }, []);
 
   const pf = data?.parsedFilters;
   const fit = results.filter((r) => r.group !== "above");
