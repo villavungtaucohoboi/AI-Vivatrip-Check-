@@ -178,6 +178,7 @@ export function ProductCard({
         <div className="relative aspect-[16/10] w-full overflow-hidden bg-paper-dim">
           <ProductImage
             src={product.thumbnail_url}
+            thumb
             alt={product.product_name}
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 50vw, 33vw"
             className="transition-transform duration-300 group-hover:scale-105"

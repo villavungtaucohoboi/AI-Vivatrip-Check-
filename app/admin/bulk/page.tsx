@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, Building2, Home, Ship, Sparkles } from "lucide-react";
+import { ArrowLeft, Building2, Home, Images, Ship, Sparkles } from "lucide-react";
 
 const SECTIONS = [
   {
@@ -44,6 +44,20 @@ export default function BulkHubPage() {
         <span className="min-w-0 flex-1">
           <span className="block text-[15px] font-bold text-ink">Rút gọn nội dung hàng loạt</span>
           <span className="block text-[12.5px] text-ink-muted">Chọn nhiều căn, rút gọn ý chính 1 lần. Mỗi căn hoàn tác / khôi phục bản gốc riêng.</span>
+        </span>
+        <span className="text-teal">→</span>
+      </Link>
+
+      <Link
+        href="/admin/bulk/villa-images"
+        className="mt-3 flex items-center gap-3 rounded-2xl border border-teal/30 bg-gradient-to-r from-teal-light to-white p-4 hover:shadow-float"
+      >
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal text-white">
+          <Images className="h-5 w-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[15px] font-bold text-ink">Up ảnh villa hàng loạt</span>
+          <span className="block text-[12.5px] text-ink-muted">Chọn 1 thư mục (mỗi căn 1 thư mục con) → tự nén, tự ghép đúng căn, up lên kho ảnh Cloudflare R2.</span>
         </span>
         <span className="text-teal">→</span>
       </Link>

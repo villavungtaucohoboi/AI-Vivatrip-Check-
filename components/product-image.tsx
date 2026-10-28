@@ -4,6 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import { ImageOff } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { thumbOf } from "@/lib/img-url";
 
 export function ProductImage({
   src,
@@ -13,6 +14,7 @@ export function ProductImage({
   fill = true,
   unoptimized,
   className,
+  thumb,
 }: {
   src: string | null | undefined;
   alt: string;
@@ -21,8 +23,12 @@ export function ProductImage({
   fill?: boolean;
   unoptimized?: boolean;
   className?: string;
+  /** Dùng ảnh NHỎ của kho R2 (danh sách / ô nhỏ); lỗi thì tự quay về ảnh gốc */
+  thumb?: boolean;
 }) {
   const [failed, setFailed] = useState(false);
+  const [useFull, setUseFull] = useState(false);
+  const small = thumb && !useFull ? thumbOf(src) : src;
 
   if (!src || failed) {
     return (
@@ -34,14 +40,14 @@ export function ProductImage({
 
   return (
     <Image
-      src={src}
+      src={small || src!}
       alt={alt}
       fill={fill}
       sizes={sizes}
       priority={priority}
       unoptimized={unoptimized}
       className={cn("object-cover", className)}
-      onError={() => setFailed(true)}
+      onError={() => (small !== src && !useFull ? setUseFull(true) : setFailed(true))}
     />
   );
 }

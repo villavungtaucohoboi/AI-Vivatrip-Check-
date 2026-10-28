@@ -70,6 +70,7 @@ export function ResortGridCard({
         <div className="relative aspect-[16/11] w-full overflow-hidden bg-paper-dim">
           <ProductImage
             src={result.images[0] ?? p.thumbnail_url}
+            thumb
             alt={p.product_name}
             sizes="(max-width: 640px) 50vw, 33vw"
             className="transition-transform duration-300 group-hover:scale-105"

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
 import { ProductImage } from "@/components/product-image";
 import { cn } from "@/lib/utils";
 import { useHorizontalScroll } from "@/lib/use-horizontal-scroll";
@@ -45,7 +44,7 @@ export function ProductGallery({
                 i === active ? "border-teal" : "border-transparent"
               )}
             >
-              <Image src={img.image_url} alt="" fill className="object-cover" sizes="80px" />
+              <ProductImage src={img.image_url} thumb alt="" sizes="80px" />
             </button>
           ))}
         </div>

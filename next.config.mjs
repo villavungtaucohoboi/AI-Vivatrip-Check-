@@ -10,6 +10,11 @@ const nextConfig = {
         hostname: "*.supabase.co",
       },
       {
+        // Kho ảnh Cloudflare R2
+        protocol: "https",
+        hostname: "anh.vivatrip.vn",
+      },
+      {
         // Chỉ dùng cho ảnh mẫu (seed data) — có thể xóa khi đã thay bằng ảnh thật
         protocol: "https",
         hostname: "picsum.photos",
