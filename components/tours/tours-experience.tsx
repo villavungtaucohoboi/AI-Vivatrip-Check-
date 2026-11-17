@@ -13,7 +13,7 @@ import {
   flagOf,
   fmt,
   isFull,
-  kk,
+  vnd,
   left,
   matchTour,
   minFrom,
@@ -229,7 +229,7 @@ export function ToursExperience({ tours, today, loadError }: { tours: TourWithDe
                       {next.length > 4 ? "…" : ""}
                     </span>
                     <span className="flex flex-wrap items-center gap-1.5 pt-0.5">
-                      <span className="text-[15px] font-extrabold text-hot tabular-nums">từ {kk(fromP)}</span>
+                      <span className="text-[15px] font-extrabold text-hot tabular-nums">từ {vnd(fromP)}</span>
                       <span className="rounded-md bg-amber-50 px-1.5 py-0.5 text-[10.5px] font-bold text-amber-800">
                         {t.partner || "—"}
                         {r.others.length ? ` · +${r.others.length} đối tác` : ""}
@@ -429,7 +429,7 @@ function TourDetail({
 
       {/* Ngày khởi hành */}
       <Section
-        title={<>Ngày khởi hành · giá NL{hasCom ? " · com · chỗ" : ""}</>}
+        title={<>Ngày khởi hành · giá người lớn{hasCom ? " · com · chỗ" : ""}</>}
         action={
           <>
             {cb("dates", "Copy lịch & giá")}
@@ -442,7 +442,7 @@ function TourDetail({
         }
       >
         {ups.length ? (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(92px,1fr))] gap-1.5">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(124px,1fr))] gap-1.5">
             {ups.map((d) => {
               const l = left(d);
               const full = isFull(d);
@@ -461,9 +461,9 @@ function TourDetail({
                     <span className="text-[10px] font-semibold text-ink-muted">{WD[weekday(d.depart_date)]}</span>
                     {d.tag && <span className="rounded bg-sand px-1 text-[9px] font-extrabold text-white">{d.tag}</span>}
                   </span>
-                  {d.old_adult ? <span className="block text-[10px] text-ink-muted line-through">{kk(d.old_adult)}</span> : null}
-                  <span className="block text-[12.5px] font-extrabold text-hot">{kk(d.adult)}</span>
-                  {d.com != null && <span className="block text-[10px] font-bold text-amber-700">com {kk(d.com)}</span>}
+                  {d.old_adult ? <span className="block text-[10.5px] text-ink-muted line-through">{vnd(d.old_adult)}</span> : null}
+                  <span className="block text-[13.5px] font-extrabold text-hot">{vnd(d.adult)}</span>
+                  {d.com != null && <span className="mt-0.5 inline-block rounded bg-amber-50 px-1 text-[10.5px] font-bold text-amber-800">Com {vnd(d.com)}/khách</span>}
                   {l != null && (
                     <span className={cn("block text-[10px] font-extrabold", full ? "text-ink-muted" : l <= 5 ? "text-amber-600" : "text-emerald-700")}>
                       {full ? "Hết chỗ" : `còn ${l}/${d.seats}`}
@@ -485,15 +485,15 @@ function TourDetail({
           {num("child", "Trẻ em")}
           {num("infant", "Em bé")}
           {num("single", "Phòng đơn")}
-          {num("visa", t.visa_discount ? `Có visa (−${kk(t.visa_discount)})` : "Đã có visa")}
+          {num("visa", t.visa_discount ? `Có visa (−${vnd(t.visa_discount)})` : "Đã có visa")}
         </div>
         {k ? (
           <div className="mt-3 space-y-2 border-t border-dashed border-border pt-3">
             <div className="flex flex-wrap items-baseline justify-between gap-2 tabular-nums">
               <span className="text-[12.5px] text-ink-muted">
-                {dmy(q.date)} · NL {fmt(k.d.adult)}
-                {k.d.child != null ? ` · TE ${fmt(k.d.child)}` : " · TE: hỏi đối tác"}
-                {k.d.infant != null ? ` · EB ${fmt(k.d.infant)}` : ""}
+                {dmy(q.date)} · Người lớn {vnd(k.d.adult)}
+                {k.d.child != null ? ` · Trẻ em ${vnd(k.d.child)}` : " · Trẻ em: hỏi đối tác"}
+                {k.d.infant != null ? ` · Em bé ${vnd(k.d.infant)}` : ""}
                 {isFull(k.d) ? <b className="text-hot"> · HẾT CHỖ</b> : left(k.d) != null ? ` · còn ${left(k.d)} chỗ` : ""}
               </span>
               <span className="text-[24px] font-extrabold text-hot">{fmt(k.total)}đ</span>
@@ -573,35 +573,36 @@ function TourDetail({
       {partners.length > 1 && (
         <Section tone="sale" title={<>So giá đối tác cùng tuyến <span className="ml-1 rounded bg-amber-600 px-1.5 py-0.5 text-[9.5px] text-white">CHỈ SALE</span></>}>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[520px] text-[12.5px] tabular-nums">
+            <table className="w-full text-[12.5px] tabular-nums">
               <thead>
                 <tr className="text-left text-[10.5px] uppercase text-ink-muted">
-                  <th className="py-1 pr-2">Đối tác</th>
-                  <th className="py-1 pr-2">Hãng bay</th>
+                  <th className="sticky left-0 bg-amber-50 py-1 pr-3">Đối tác</th>
+                  <th className="whitespace-nowrap py-1 pr-3">Hãng bay</th>
                   {ds.map((d) => (
-                    <th key={d} className="py-1 text-right">{dm(d)}</th>
+                    <th key={d} className="whitespace-nowrap py-1 pl-4 text-right">{dm(d)}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {partners.map((p) => (
                   <tr key={p.id} className="border-t border-amber-200/70">
-                    <td className="py-1.5 pr-2">
+                    <td className="sticky left-0 bg-amber-50 py-1.5 pr-3 align-top">
                       <button
                         onClick={() => onPickPartner(p.id)}
-                        className={cn("rounded-full px-2.5 py-1 text-[12px] font-bold", p.id === t.id ? "bg-teal text-white" : "border border-border bg-white text-ink")}
+                        title={p.name}
+                        className={cn("whitespace-nowrap rounded-full px-2.5 py-1 text-[12px] font-bold", p.id === t.id ? "bg-teal text-white" : "border border-border bg-white text-ink")}
                       >
                         {p.partner || "—"}
-                        {p.name !== t.name ? ` · ${p.name.replace(t.name, "").replace(/[()]/g, "").trim() || ""}` : ""}
                       </button>
+                      {p.name !== t.name && <span className="mt-0.5 line-clamp-1 block max-w-[190px] text-[10.5px] text-ink-muted">{p.name}</span>}
                     </td>
-                    <td className="py-1.5 pr-2">{p.airline}</td>
+                    <td className="max-w-[140px] py-1.5 pr-3 align-top text-[11.5px]">{p.airline || "—"}</td>
                     {ds.map((d) => {
                       const x = p.departures.find((y) => y.depart_date === d);
                       const min = Math.min(...partners.map((pp) => { const y = pp.departures.find((z) => z.depart_date === d); return y && !isFull(y) ? y.adult : 1e12; }));
                       return (
-                        <td key={d} className={cn("py-1.5 text-right", x && !isFull(x) && x.adult === min && "font-extrabold text-emerald-700")}>
-                          {x ? (isFull(x) ? <span className="text-ink-muted">hết</span> : kk(x.adult)) : "—"}
+                        <td key={d} className={cn("whitespace-nowrap py-1.5 pl-4 text-right align-top", x && !isFull(x) && x.adult === min && "font-extrabold text-emerald-700")}>
+                          {x ? (isFull(x) ? <span className="text-ink-muted">hết</span> : vnd(x.adult)) : <span className="text-ink-muted">—</span>}
                         </td>
                       );
                     })}
@@ -620,11 +621,16 @@ function TourDetail({
             {t.sale_terms.map((x) => <li key={x}>{x}</li>)}
             <li>
               Nguồn: <b>{t.partner || "—"}</b>
-              {t.partner_file ? ` · ${t.partner_file}` : ""}
+              {t.partner_file && (
+                <>
+                  {" · "}
+                  <a href={t.partner_file} target="_blank" rel="noopener noreferrer" className="font-semibold text-teal-dark underline">file giá đối tác</a>
+                </>
+              )}
               {t.source_link && (
                 <>
                   {" · "}
-                  <a href={t.source_link} target="_blank" rel="noopener noreferrer" className="font-semibold text-teal-dark underline">mở file gốc</a>
+                  <a href={t.source_link} target="_blank" rel="noopener noreferrer" className="font-semibold text-teal-dark underline">lịch trình gốc</a>
                 </>
               )}
             </li>

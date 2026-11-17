@@ -5,6 +5,8 @@ import type { Tour, TourDay, TourDeparture, TourWithDeps } from "@/lib/tour-type
 export const HOTLINE = "VivaTrip · Hotline 0942.988.699";
 export const fmt = (n: number) => new Intl.NumberFormat("vi-VN").format(Math.round(n));
 export const kk = (n: number | null | undefined) => (n == null ? "—" : `${fmt(Math.round(n / 1000))}k`);
+/** Số tiền đầy đủ, dễ đọc: 5990000 → "5.990.000đ" */
+export const vnd = (n: number | null | undefined) => (n == null ? "—" : `${fmt(n)}đ`);
 export const dmy = (s: string) => s.split("-").reverse().join("/");
 export const dm = (s: string) => dmy(s).slice(0, 5);
 export const WD = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];

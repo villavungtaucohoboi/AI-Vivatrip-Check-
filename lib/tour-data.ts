@@ -12,11 +12,26 @@ export async function fetchTours(
   if (error) return { tours: [], error: /does not exist|schema cache/i.test(error.message) ? "Chưa chạy SQL 0030_tours.sql trên Supabase." : error.message };
   const ids = (tours ?? []).map((t) => t.id as string);
   const deps: TourDeparture[] = [];
-  for (let i = 0; i < ids.length; i += 150) {
-    let dq = supabase.from("tour_departures").select("*").in("tour_id", ids.slice(i, i + 150)).order("depart_date");
-    if (opts.fromDate) dq = dq.gt("depart_date", opts.fromDate);
-    const { data } = await dq.limit(10000);
-    deps.push(...((data ?? []) as TourDeparture[]));
+  // Supabase trả tối đa 1.000 dòng/lần → lấy theo nhóm tour nhỏ + phân trang, chạy song song, không mất ngày nào.
+  const PAGE = 1000;
+  const loadGroup = async (group: string[]) => {
+    const out: TourDeparture[] = [];
+    for (let from = 0; ; from += PAGE) {
+      let dq = supabase.from("tour_departures").select("*").in("tour_id", group).order("depart_date").order("id");
+      if (opts.fromDate) dq = dq.gt("depart_date", opts.fromDate);
+      const { data, error: e } = await dq.range(from, from + PAGE - 1);
+      if (e) throw new Error(e.message);
+      out.push(...((data ?? []) as TourDeparture[]));
+      if (!data || data.length < PAGE) break;
+    }
+    return out;
+  };
+  const groups: string[][] = [];
+  for (let i = 0; i < ids.length; i += 60) groups.push(ids.slice(i, i + 60));
+  try {
+    for (const part of await Promise.all(groups.map(loadGroup))) deps.push(...part);
+  } catch (e) {
+    return { tours: [], error: e instanceof Error ? e.message : "Lỗi tải ngày khởi hành" };
   }
   const by = new Map<string, TourDeparture[]>();
   for (const d of deps) by.set(d.tour_id!, [...(by.get(d.tour_id!) ?? []), { ...d, depart_date: String(d.depart_date).slice(0, 10) }]);

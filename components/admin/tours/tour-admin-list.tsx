@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Copy, Eye, EyeOff, FileSpreadsheet, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { dm, flagOf, isFull, kk, minFrom, norm, upcoming } from "@/lib/tour-utils";
+import { dm, flagOf, isFull, minFrom, norm, upcoming, vnd } from "@/lib/tour-utils";
 import type { TourWithDeps } from "@/lib/tour-types";
 import { cn } from "@/lib/utils";
 
@@ -102,7 +102,7 @@ export function TourAdminList({ tours, today, loadError }: { tours: TourWithDeps
                       <span className="text-[12px] font-bold text-hot">Hết ngày — mở thêm</span>
                     )}
                   </td>
-                  <td className="p-2.5 text-right font-extrabold text-hot tabular-nums">{kk(minFrom(t.departures, today))}</td>
+                  <td className="p-2.5 text-right font-extrabold text-hot tabular-nums">{vnd(minFrom(t.departures, today))}</td>
                   <td className="p-2.5">
                     <div className="flex justify-end gap-1">
                       <Link href={`/admin/tours/${t.id}`} title="Sửa / mở thêm ngày" className="rounded-lg border border-border p-1.5 hover:bg-paper-dim"><Pencil className="h-4 w-4" /></Link>
