@@ -78,7 +78,26 @@ Giá/khách = Tổng / pax_count (làm tròn nghìn; ẩn nếu không có pax_c
 - RLS bật, **không có policy cho anon/authenticated** (giống bảng lương `0017`). Mọi đọc/ghi qua API route dùng
   `createServiceClient()` (`lib/supabase/service.ts`, cần `SUPABASE_SERVICE_ROLE_KEY` — đã có trên Vercel cho bảng lương).
 - Trang khách `/bg/[code]`: server component đọc **đúng 1 báo giá theo code**; không có API liệt kê công khai.
-- Khu soạn `/bao-gia/*` và API `/api/quotes/*`: xem **câu hỏi mở Q1**.
+- Khu soạn `/bao-gia/*` và API `/api/quotes/*`: **mật khẩu chung cho sale** (người dùng chọn).
+  - Biến môi trường mới `SALE_PASSWORD`; trang `/bao-gia/login` + `POST /api/quotes/login` đặt cookie httpOnly
+    `vivatrip_sale` (30 ngày). Không lưu nguyên văn mật khẩu trong cookie: lưu HMAC-SHA256(`SALE_PASSWORD`, chuỗi cố định)
+    và so khớp ở middleware (Web Crypto, chạy được ở Edge).
+  - Cookie Admin hợp lệ (`vivatrip_admin`) cũng được vào.
+  - `middleware.ts` mở rộng `matcher` để chặn `/bao-gia/:path*` (trừ `/bao-gia/login`) và `/api/quotes/:path*`
+    (trừ `/api/quotes/login`); trang → chuyển về login, API → 401.
+  - Vì dùng chung 1 mật khẩu nên không biết ai tạo/sửa; người phụ trách (tên + SĐT) sale tự điền, trình duyệt nhớ lần trước.
+
+### Tên miền riêng cho khách: `baogia.vivatrip.vn` (người dùng chọn)
+Lý do: link trên tên miền công cụ nội bộ (`vivatripcheck.vercel.app`) cho khách lần ra các trang đang mở tự do có chiết khấu
+nội bộ, nguồn giá, com.
+- Thêm `baogia.vivatrip.vn` vào **cùng project Vercel** (người dùng thêm bản ghi CNAME `baogia` → `cname.vercel-dns.com`
+  và thêm domain trong Vercel → Settings → Domains; mình hướng dẫn từng bước khi xong code).
+- `middleware.ts` kiểm tra `host`: nếu là tên miền báo giá (biến `QUOTE_HOST`, mặc định `baogia.vivatrip.vn`) thì **chỉ cho**
+  `/bg/*` và tài nguyên tĩnh cần cho trang đó (`/_next/*`, `/brand/*`, `/icons/*`, favicon); `/` và mọi đường dẫn khác → 404
+  (hoặc chuyển về `https://vivatrip.vn`). Tên miền nội bộ vẫn mở `/bg/*` để sale xem thử.
+- Link copy cho khách luôn dùng `NEXT_PUBLIC_QUOTE_BASE_URL` (mặc định `https://baogia.vivatrip.vn`); nếu chưa cấu hình
+  tên miền thì sale vẫn xem được qua tên miền nội bộ.
+- Trang `/bg` không tải ChatWidget/Header/BottomNav và không gọi `/api/admin/session` (tránh lộ endpoint nội bộ, tránh lỗi CORS).
 
 ## 5. Bố cục bản gửi khách (`/bg/[code]` + PDF)
 
@@ -154,7 +173,13 @@ tổng thấp nhất, trạng thái, ngày sửa; nút Mở / Nhân bản / Copy
 Tên/thứ tự cột chi tiết trong form; cách kéo đổi thứ tự (nút lên/xuống là đủ); cách sinh `number` an toàn khi 2 sale tạo cùng lúc
 (chấp nhận trùng hiếm → thêm hậu tố); chi tiết responsive; cách tách route group để trang `/bg` không có Header/BottomNav.
 
-## 9. Câu hỏi mở cho người dùng
-- **Q1 — Ai được vào khu soạn `/bao-gia`?** Hiện phần Sale của web mở tự do không cần đăng nhập. Nếu `/bao-gia` cũng mở
-  tự do thì ai biết địa chỉ web đều xem được danh sách khách + SĐT. Đề xuất: **mật khẩu chung cho sale** (biến môi trường
-  `SALE_PASSWORD`, cookie giống Admin, Admin cũng vào được).
+## 9. Quyết định đã chốt
+- Người dùng: mật khẩu chung cho sale (`SALE_PASSWORD`); link khách trên `baogia.vivatrip.vn`; cách A (link + PDF in từ trình duyệt);
+  mỗi phương án có bảng dịch vụ riêng (xe/ăn uống khác nhau theo nơi); 1 phương án là trường hợp thường gặp.
+- Mình quyết (người dùng có thể sửa):
+  - Link luôn hiện **bản mới nhất**; trang khách ghi "Cập nhật lúc …". Muốn giữ bản cũ → Nhân bản (mã mới).
+  - Giá điền từ kho là **giá bán trước chiết khấu nội bộ** (resort: `avgBase` của `quoteStay`; villa: `getApplicablePrice`).
+  - Ô SL/số lần để trống = 1; đơn giá trống = "Theo thực tế", không cộng tổng.
+  - Nhóm "Nơi nghỉ" mặc định không cộng VAT, các nhóm khác mặc định cộng VAT 8%.
+  - Sản phẩm thiếu hạng phòng → thêm 1 dòng "Nơi nghỉ" theo giá chung của sản phẩm, sale sửa tay.
+  - Không thêm thư viện mới.
