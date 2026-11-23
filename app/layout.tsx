@@ -2,9 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Be_Vietnam_Pro, Quicksand } from "next/font/google";
 import { Toaster } from "sonner";
 import { ServiceWorkerRegister } from "@/components/service-worker-register";
-import { Header } from "@/components/header";
-import { BottomNav } from "@/components/bottom-nav";
-import { ChatWidget } from "@/components/chat/chat-widget";
+import { AppChrome } from "@/components/app-chrome";
 import "./globals.css";
 
 // Be Vietnam Pro: font thiết kế riêng cho tiếng Việt — dấu rõ, dễ đọc hơn Inter
@@ -51,10 +49,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="vi" className={`${inter.variable} ${display.variable}`}>
       <body className="min-h-dvh bg-paper pb-20 font-sans sm:pb-0">
-        <Header role="sale" />
-        {children}
-        <BottomNav role="sale" />
-        <ChatWidget />
+        <AppChrome>{children}</AppChrome>
         <Toaster position="top-center" richColors closeButton />
         <ServiceWorkerRegister />
       </body>

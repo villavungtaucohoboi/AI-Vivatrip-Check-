@@ -28,3 +28,39 @@
 .tabular-price {
   font-variant-numeric: tabular-nums;
 }
+
+/* ===== Báo giá gửi khách (components/quote/quote-document.tsx) ===== */
+.quote-note {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+  html,
+  body {
+    background: #fff !important;
+    padding: 0 !important;
+  }
+  .quote-doc {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    font-size: 12px;
+  }
+  .quote-note {
+    display: block;
+    -webkit-line-clamp: unset;
+    overflow: visible;
+  }
+  .quote-block,
+  .quote-row {
+    break-inside: avoid;
+  }
+  .quote-page-break {
+    break-before: page;
+  }
+}
