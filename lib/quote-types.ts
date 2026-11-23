@@ -71,6 +71,12 @@ export interface Quote extends QuoteInput {
   updated_at: string;
 }
 
+/** Dòng gọn cho danh sách báo giá */
+export type QuoteSummary = Pick<Quote, "id" | "code" | "number" | "status" | "customer" | "program" | "updated_at"> & {
+  optionCount: number;
+  minTotal: number | null;
+};
+
 export const COMPANY = {
   name: "CÔNG TY CỔ PHẦN XÂY DỰNG VÀ DU LỊCH VIVA",
   address: "71 Trần Đăng Ninh, Hà Đông, Hà Nội",
