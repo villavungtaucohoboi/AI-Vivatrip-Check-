@@ -16,10 +16,11 @@ export function decideRoute(
   input: { host: string; pathname: string; search: string; sale: boolean; admin: boolean },
   quoteHost: string
 ): RouteDecision {
-  const host = input.host.toLowerCase().split(":")[0];
+  // Bỏ cổng và dấu chấm cuối ("baogia.vivatrip.vn." cũng là cùng tên miền)
+  const host = input.host.toLowerCase().split(":")[0].replace(/\.+$/, "");
   const { pathname } = input;
 
-  if (host === quoteHost.toLowerCase()) {
+  if (host === quoteHost.toLowerCase().replace(/\.+$/, "")) {
     if (pathname === "/") return { action: "redirect", to: "https://vivatrip.vn" };
     return QUOTE_HOST_ALLOW.some((re) => re.test(pathname)) ? { action: "next" } : { action: "notfound" };
   }
@@ -34,4 +35,10 @@ export function decideRoute(
     return { action: "unauthorized" };
   }
   return { action: "next" };
+}
+
+/** Đường dẫn quay lại sau đăng nhập: chỉ nhận đường dẫn nội bộ (chặn "//x", "/\\x", "https://x"…) */
+export function safeNext(next: string | null | undefined): string {
+  if (!next || !/^\/(?![\/\\])/.test(next) || next.includes("\\")) return "/bao-gia";
+  return next;
 }

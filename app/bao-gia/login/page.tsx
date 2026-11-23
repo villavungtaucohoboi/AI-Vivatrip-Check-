@@ -6,6 +6,7 @@ import { FileText, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { safeNext } from "@/lib/route-guard";
 
 function SaleLoginForm() {
   const router = useRouter();
@@ -30,8 +31,7 @@ function SaleLoginForm() {
       return;
     }
     // Chỉ cho chuyển tới đường dẫn nội bộ (tránh link "next" dẫn ra trang ngoài)
-    const next = searchParams.get("next") ?? "";
-    router.replace(next.startsWith("/") && !next.startsWith("//") ? next : "/bao-gia");
+    router.replace(safeNext(searchParams.get("next")));
     router.refresh();
   }
 

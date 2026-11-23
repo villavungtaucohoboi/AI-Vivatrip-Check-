@@ -56,7 +56,8 @@ test("qtyLabel ghép số lượng và số lần", () => {
 test("cheapestOptionId chỉ có khi từ 2 phương án", () => {
   assert.equal(cheapestOptionId([ivory], 8), null);
   const pricey = opt([it("Nơi nghỉ", "Villa", 5, 1, 13_000_000, false)], "o2");
-  assert.equal(cheapestOptionId([pricey, ivory], 8), "o1");
+  const ivoryNoTbd = { ...ivory, items: ivory.items.filter((x) => x.unit_price != null) };
+  assert.equal(cheapestOptionId([pricey, ivoryNoTbd], 8), "o1");
 });
 
 test("nightsBetween", () => {
@@ -70,4 +71,10 @@ test("cheapestOptionId: các phương án bằng tiền nhau thì không gắn n
   const a = opt([it("Nơi nghỉ", "Villa", 1, 1, 5_000_000, false)], "a");
   const b = opt([it("Nơi nghỉ", "Villa", 1, 1, 5_000_000, false)], "b");
   assert.equal(cheapestOptionId([a, b], 8), null);
+});
+
+test("cheapestOptionId bỏ qua phương án còn mục 'Theo thực tế'", () => {
+  const tbd = opt([it("Nơi nghỉ", "Villa", 1, 1, null, false), it("Vận chuyển", "Xe", 1, 1, 1_000_000, true)], "tbd");
+  const full = opt([it("Nơi nghỉ", "Villa", 1, 1, 5_000_000, false)], "full");
+  assert.equal(cheapestOptionId([tbd, full], 8), "full");
 });

@@ -53,7 +53,11 @@ export function perPax(total: number, paxCount: number | null): number | null {
 /** Phương án tổng thấp nhất — chỉ khi có từ 2 phương án */
 export function cheapestOptionId(options: QuoteOption[], vatRate: number): string | null {
   if (options.length < 2) return null;
-  const totals = options.map((o) => ({ id: o.id, total: optionTotals(o, vatRate).total })).filter((x) => x.total > 0);
+  // Phương án còn mục "Theo thực tế" chưa đủ tổng → không so "rẻ nhất"
+  const totals = options
+    .map((o) => ({ id: o.id, t: optionTotals(o, vatRate) }))
+    .filter((x) => x.t.total > 0 && !x.t.hasTbd)
+    .map((x) => ({ id: x.id, total: x.t.total }));
   if (!totals.length) return null;
   const min = Math.min(...totals.map((x) => x.total));
   const cheapest = totals.filter((x) => x.total === min);

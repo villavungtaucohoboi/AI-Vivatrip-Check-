@@ -2,7 +2,7 @@ import "server-only";
 import { createServiceClient } from "@/lib/supabase/service";
 import { optionTotals } from "@/lib/quote-calc";
 import { sanitizeQuoteInput } from "@/lib/quote-sanitize";
-import { quoteNumber, randomCode } from "@/lib/quote-code";
+import { nextQuoteNumber, quoteNumber, randomCode } from "@/lib/quote-code";
 import type { Quote, QuoteInput, QuoteSummary } from "@/lib/quote-types";
 
 // Truy cập bảng quotes — CHỈ phía máy chủ, bằng service role (bảng khoá RLS hoàn toàn).
@@ -52,8 +52,8 @@ export function nowVN(): Date {
 export async function insertQuote(input: QuoteInput) {
   const now = nowVN();
   const prefix = quoteNumber(now, 0).slice(0, -3); // "BG-2611-"
-  const { count } = await quotesDb().select("id", { count: "exact", head: true }).like("number", `${prefix}%`);
-  const number = quoteNumber(now, (count ?? 0) + 1);
+  const { data: nums } = await quotesDb().select("number").like("number", `${prefix}%`);
+  const number = nextQuoteNumber((nums ?? []).map((r) => String(r.number)), now);
   for (let attempt = 0; attempt < 5; attempt++) {
     const { data, error } = await quotesDb()
       .insert({ ...input, code: randomCode(), number })

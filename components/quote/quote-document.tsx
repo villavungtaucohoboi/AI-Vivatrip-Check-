@@ -30,7 +30,7 @@ export function QuoteDocument({ quote: q }: { quote: DocQuote }) {
   const customer = q.customer.company || q.customer.name;
 
   return (
-    <article className="quote-doc mx-auto w-full max-w-[860px] overflow-hidden bg-white text-[13.5px] leading-relaxed text-ink shadow-card sm:rounded-2xl print:max-w-none print:rounded-none print:shadow-none">
+    <article className="quote-doc mx-auto w-full max-w-[860px] overflow-hidden bg-white [overflow-wrap:anywhere] text-[13.5px] leading-relaxed text-ink shadow-card sm:rounded-2xl print:max-w-none print:rounded-none print:shadow-none">
       {/* Đầu trang */}
       <header className="flex items-start justify-between gap-4 border-b-[3px] border-teal px-5 pb-4 pt-5 sm:px-8 sm:pt-6">
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -193,6 +193,7 @@ function OptionCard({ o, q, best }: { o: QuoteOption; q: DocQuote; best: boolean
         <p className="text-[10.5px] font-bold uppercase text-teal-dark">Tổng trọn gói</p>
         <p className="text-[19px] font-extrabold leading-tight text-teal-dark tabular-nums">{vnd(t.total)}</p>
         {pp != null && <p className="text-[11px] text-ink-muted">≈ {vnd(pp)}/khách</p>}
+        {t.hasTbd && <p className="text-[11px] text-ink-muted">Chưa gồm mục tính theo thực tế</p>}
       </div>
     </div>
   );

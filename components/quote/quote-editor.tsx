@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowDown, ArrowLeft, ArrowUp, Copy, CopyPlus, ExternalLink, FileDown, Link2, Loader2, MessageCircle, Plus, Send, Trash2 } from "lucide-react";
@@ -8,6 +8,8 @@ import { toast } from "sonner";
 import { nightsBetween } from "@/lib/quote-calc";
 import { quoteUrl, zaloMessage } from "@/lib/quote-link";
 import { emptyOption, newId, type Quote, type QuoteInput, type QuoteOption } from "@/lib/quote-types";
+import { applyPick, type ProductPick } from "@/lib/quote-edit";
+import { createSaveQueue } from "@/lib/save-queue";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { QuoteDocument } from "@/components/quote/quote-document";
 import { OptionEditor } from "@/components/quote/option-editor";
@@ -42,7 +44,16 @@ export function QuoteEditor({ id }: { id: string }) {
   const [view, setView] = useState<"edit" | "preview">("edit");
   const [confirmDel, setConfirmDel] = useState<number | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const latest = useRef<QuoteInput | null>(null);
+  // Hàng đợi lưu: không gửi 2 lần lưu chồng nhau, luôn lưu bản mới nhất
+  const queue = useRef<ReturnType<typeof createSaveQueue<QuoteInput>> | null>(null);
+  if (!queue.current) {
+    queue.current = createSaveQueue<QuoteInput>(async (body) => {
+      const r = await fetch(`/api/quotes/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error ?? "Lỗi lưu");
+      setMeta((m) => (m ? { ...m, updated_at: d.quote.updated_at } : m));
+    });
+  }
 
   // Tải báo giá
   useEffect(() => {
@@ -68,39 +79,43 @@ export function QuoteEditor({ id }: { id: string }) {
       .catch((e) => setLoadError(e instanceof Error ? e.message : "Lỗi"));
   }, [id]);
 
-  const doSave = useCallback(async () => {
-    const body = latest.current;
-    if (!body) return;
-    setSave("saving");
-    try {
-      const r = await fetch(`/api/quotes/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(d.error ?? "Lỗi lưu");
-      setMeta((m) => (m ? { ...m, updated_at: d.quote.updated_at } : m));
-      setSave(latest.current === body ? "saved" : "dirty");
-    } catch (e) {
-      setSave("error");
-      toast.error(e instanceof Error ? e.message : "Lỗi lưu");
+  /** Lưu ngay mọi thay đổi; lỗi → báo và tự thử lại sau 5 giây. Trả true khi đã lưu hết. */
+  async function flush(): Promise<boolean> {
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
     }
-  }, [id]);
+    const qq = queue.current!;
+    if (qq.isClean()) return true;
+    setSave("saving");
+    const ok = await qq.flush();
+    if (ok) {
+      setSave(qq.isClean() ? "saved" : "dirty");
+      return qq.isClean() || flush();
+    }
+    setSave("error");
+    toast.error("Chưa lưu được — đang thử lại…");
+    timer.current = setTimeout(flush, 5000);
+    return false;
+  }
 
-  // Sửa → tự lưu sau 1,5 giây không gõ
-  const update = (patch: Partial<QuoteInput>) => {
+  // Sửa → tự lưu sau 1,5 giây không gõ. Dạng hàm để luôn áp lên state mới nhất.
+  const update = (p: Partial<QuoteInput> | ((cur: QuoteInput) => Partial<QuoteInput>)) => {
     setQ((cur) => {
       if (!cur) return cur;
-      const next = { ...cur, ...patch };
-      latest.current = next;
+      const next = { ...cur, ...(typeof p === "function" ? p(cur) : p) };
+      queue.current!.set(next);
       return next;
     });
     setSave("dirty");
     if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(doSave, 1500);
+    timer.current = setTimeout(flush, 1500);
   };
 
   // Cảnh báo khi rời trang mà chưa lưu
   useEffect(() => {
     const h = (e: BeforeUnloadEvent) => {
-      if (save === "dirty" || save === "saving") e.preventDefault();
+      if (save !== "saved") e.preventDefault();
     };
     window.addEventListener("beforeunload", h);
     return () => window.removeEventListener("beforeunload", h);
@@ -134,13 +149,14 @@ export function QuoteEditor({ id }: { id: string }) {
   const localUrl = `/bg/${meta.code}`;
   const opts = q.options;
   const cur = opts[Math.min(tab, opts.length - 1)];
-  const setOption = (o: QuoteOption) => update({ options: opts.map((x) => (x.id === o.id ? o : x)) });
+  const setOption = (o: QuoteOption) => update((c) => ({ options: c.options.map((x) => (x.id === o.id ? o : x)) }));
+  const pickInto = (optionId: string, pick: ProductPick) => update((c) => ({ options: c.options.map((x) => (x.id === optionId ? applyPick(x, pick) : x)) }));
   const nights = nightsBetween(q.program.date_from, q.program.date_to);
   const setProgram = (p: Partial<QuoteInput["program"]>) => update({ program: { ...q.program, ...p } });
   const setCustomer = (c: Partial<QuoteInput["customer"]>) => update({ customer: { ...q.customer, ...c } });
 
   async function duplicate() {
-    if (save !== "saved") await doSave();
+    if (!(await flush())) return toast.error("Chưa lưu được thay đổi — thử lại sau");
     const r = await fetch(`/api/quotes/${id}/duplicate`, { method: "POST" });
     const d = await r.json().catch(() => ({}));
     if (!r.ok) return toast.error(d.error ?? "Không nhân bản được");
@@ -286,7 +302,7 @@ export function QuoteEditor({ id }: { id: string }) {
               )}
             </div>
             {cur ? (
-              <OptionEditor option={cur} onChange={setOption} from={q.program.date_from} to={q.program.date_to} vatRate={q.vat_rate} paxCount={q.program.pax_count} />
+              <OptionEditor option={cur} onChange={setOption} onPick={(pick) => pickInto(cur.id, pick)} from={q.program.date_from} to={q.program.date_to} vatRate={q.vat_rate} paxCount={q.program.pax_count} />
             ) : (
               <button onClick={() => update({ options: [emptyOption()] })} className={tb}>
                 <Plus className="h-4 w-4" /> Thêm phương án

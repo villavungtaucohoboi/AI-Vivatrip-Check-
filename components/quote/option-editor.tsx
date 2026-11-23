@@ -2,6 +2,7 @@
 
 import { optionTotals, perPax } from "@/lib/quote-calc";
 import type { QuoteItem, QuoteOption } from "@/lib/quote-types";
+import type { ProductPick } from "@/lib/quote-edit";
 import { vnd } from "@/lib/tour-utils";
 import { Field, TextIn } from "@/components/quote/fields";
 import { ItemTable } from "@/components/quote/item-table";
@@ -11,6 +12,7 @@ import { ProductPicker } from "@/components/quote/product-picker";
 export function OptionEditor({
   option: o,
   onChange,
+  onPick,
   from,
   to,
   vatRate,
@@ -18,6 +20,8 @@ export function OptionEditor({
 }: {
   option: QuoteOption;
   onChange: (o: QuoteOption) => void;
+  /** Chọn từ kho — áp lên state mới nhất (tránh mất sửa đổi trong lúc chờ tải giá) */
+  onPick: (pick: ProductPick) => void;
   from: string | null;
   to: string | null;
   vatRate: number;
@@ -64,21 +68,7 @@ export function OptionEditor({
         </Field>
       </div>
 
-      <ProductPicker
-        from={from}
-        to={to}
-        onPick={({ option, items }) =>
-          onChange({
-            ...o,
-            name: o.name || option.name,
-            place: o.place || option.place,
-            image_url: o.image_url || option.image_url,
-            highlights: o.highlights.some(Boolean) ? o.highlights : option.highlights,
-            product_id: o.product_id ?? option.product_id,
-            items: [...o.items, ...items],
-          })
-        }
-      />
+      <ProductPicker from={from} to={to} onPick={onPick} />
 
       <ItemTable items={o.items} onChange={(items: QuoteItem[]) => set({ items })} />
 

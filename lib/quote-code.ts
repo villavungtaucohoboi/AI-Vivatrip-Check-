@@ -21,3 +21,15 @@ export function quoteNumber(date: Date, seq: number): string {
   const mm = String(date.getMonth() + 1).padStart(2, "0");
   return `BG-${yy}${mm}-${String(seq).padStart(3, "0")}`;
 }
+
+/** Số BG tiếp theo trong tháng = số lớn nhất đã có + 1 (xoá báo giá không làm số bị dùng lại) */
+export function nextQuoteNumber(existing: string[], date: Date): string {
+  const prefix = quoteNumber(date, 0).slice(0, -3);
+  let max = 0;
+  for (const n of existing) {
+    if (!n.startsWith(prefix)) continue;
+    const v = Number(n.slice(prefix.length));
+    if (Number.isInteger(v) && v > max) max = v;
+  }
+  return quoteNumber(date, max + 1);
+}

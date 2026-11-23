@@ -41,12 +41,15 @@ export const SAMPLE_QUOTE: QuoteInput = {
   sale_phone: "0912 345 678",
 };
 
-/** Báo giá rất dài — để thử bản in PDF */
+const LONG_LINK = "https://drive.google.com/drive/folders/1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789_anh-villa-ivory-lien-ket-rat-dai";
+
+/** Báo giá rất dài — để thử bản in PDF (có cả đường link dài không dấu cách) */
 export const SAMPLE_QUOTE_LARGE: QuoteInput = {
   ...SAMPLE_QUOTE,
+  notes: [...SAMPLE_QUOTE.notes, `Ảnh: ${LONG_LINK}`],
   options: Array.from({ length: 5 }, (_, k) =>
     opt(`big${k}`, `Phương án dài ${k + 1}`, "Thử in", ["Ghi chú dài để thử ngắt trang"], Array.from({ length: 30 }, (_, j) =>
-      it((["Nơi nghỉ", "Vận chuyển", "Ăn uống & vui chơi", "Khác"] as QuoteGroup[])[j % 4], `Dịch vụ số ${j + 1} có tên khá dài để thử xuống dòng trong bảng`, 2 + j, "khách", 1 + (j % 3), "bữa", 150_000 * (j + 1), j % 2 === 0, "Ghi chú rất dài: ".repeat(6))
-    ))
+      it((["Nơi nghỉ", "Vận chuyển", "Ăn uống & vui chơi", "Khác"] as QuoteGroup[])[j % 4], `Dịch vụ số ${j + 1} có tên khá dài để thử xuống dòng trong bảng`, 2 + j, "khách", 1 + (j % 3), "bữa", 150_000 * (j + 1), j % 2 === 0, j === 0 ? LONG_LINK : "Ghi chú rất dài: ".repeat(6))
+    ).concat([it("Khác", LONG_LINK, 1, "", null, "", 100_000, false)]))
   ),
 };

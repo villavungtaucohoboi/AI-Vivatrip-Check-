@@ -36,3 +36,17 @@ test("tên miền nội bộ: khu báo giá cần mật khẩu sale hoặc Admin
   assert.deepEqual(at(H, "/search"), { action: "next" });
   assert.deepEqual(at(H, "/bao-giax"), { action: "next" });
 });
+
+test("tên miền báo giá có dấu chấm cuối (baogia.vivatrip.vn.) vẫn bị chặn", () => {
+  assert.deepEqual(at("baogia.vivatrip.vn.", "/search"), { action: "notfound" });
+  assert.deepEqual(at("BAOGIA.vivatrip.vn.:443", "/admin/products"), { action: "notfound" });
+  assert.deepEqual(at("baogia.vivatrip.vn.", "/bg/X"), { action: "next" });
+});
+
+test("safeNext chỉ nhận đường dẫn nội bộ", async () => {
+  const { safeNext } = await import("@/lib/route-guard");
+  assert.equal(safeNext("/bao-gia/abc?x=1"), "/bao-gia/abc?x=1");
+  for (const bad of ["//evil.com", "/\\evil.com", "/\\/evil.com", "https://evil.com", "javascript:alert(1)", "", null]) {
+    assert.equal(safeNext(bad as string | null), "/bao-gia", String(bad));
+  }
+});
