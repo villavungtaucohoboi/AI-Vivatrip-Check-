@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "test": "node --import ./tests/setup/alias.mjs --test \"tests/**/*.test.ts\""
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",
