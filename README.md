@@ -176,3 +176,24 @@ Dữ liệu tải lại (refetch) sau mỗi lần đăng/sửa/xóa thay vì dù
 Không CRM, không booking, không kiểm tra tình trạng phòng trống, không thanh
 toán. Nếu muốn mở rộng các phần này, nên làm ở một dự án/app riêng để giữ
 VivaTrip Check Căn đơn giản và nhanh.
+
+## Module "Soạn báo giá" (`/bao-gia`)
+
+Sale soạn báo giá chương trình cho đoàn (1 hoặc nhiều phương án nơi ở; mỗi phương án có nơi nghỉ, xe,
+ăn uống… riêng) rồi gửi khách **link** `https://baogia.vivatrip.vn/bg/<mã>` qua Zalo. Trang link có nút
+**Tải PDF** (in A4 từ trình duyệt). Thiết kế: `docs/superpowers/specs/2026-11-23-bao-gia-design.md`.
+
+**Cài đặt (1 lần):**
+1. Supabase → SQL Editor: chạy [`supabase/migrations/0032_quotes.sql`](./supabase/migrations/0032_quotes.sql).
+   Bảng `quotes` khoá RLS hoàn toàn (chứa tên/SĐT khách) — app đọc/ghi bằng `SUPABASE_SERVICE_ROLE_KEY`
+   (đã dùng cho Bảng lương).
+2. Vercel → Settings → Environment Variables:
+   - `SALE_PASSWORD` — mật khẩu chung để sale vào `/bao-gia` (Admin đăng nhập rồi cũng vào được).
+   - (tuỳ chọn) `QUOTE_HOST` — mặc định `baogia.vivatrip.vn`.
+   - (tuỳ chọn) `NEXT_PUBLIC_QUOTE_BASE_URL` — mặc định `https://baogia.vivatrip.vn`.
+3. Tên miền cho khách: nơi quản lý DNS của vivatrip.vn thêm bản ghi **CNAME** `baogia` → `cname.vercel-dns.com`;
+   Vercel → project → Settings → Domains → thêm `baogia.vivatrip.vn`.
+   Trên tên miền này **chỉ mở được `/bg/<mã>`** (middleware chặn mọi trang nội bộ: tìm villa, admin, API…).
+
+**Test:** `npm test` (Node `node:test`, không cần cài thêm) — kiểm tra tính tiền, mã, dữ liệu đầu vào,
+điền từ kho, chặn tên miền / mật khẩu.

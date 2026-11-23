@@ -65,3 +65,9 @@ test("nightsBetween", () => {
   assert.equal(nightsBetween("2026-12-06", "2026-12-05"), null);
   assert.equal(nightsBetween(null, "2026-12-06"), null);
 });
+
+test("cheapestOptionId: các phương án bằng tiền nhau thì không gắn nhãn", () => {
+  const a = opt([it("Nơi nghỉ", "Villa", 1, 1, 5_000_000, false)], "a");
+  const b = opt([it("Nơi nghỉ", "Villa", 1, 1, 5_000_000, false)], "b");
+  assert.equal(cheapestOptionId([a, b], 8), null);
+});

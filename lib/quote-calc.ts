@@ -53,12 +53,12 @@ export function perPax(total: number, paxCount: number | null): number | null {
 /** Phương án tổng thấp nhất — chỉ khi có từ 2 phương án */
 export function cheapestOptionId(options: QuoteOption[], vatRate: number): string | null {
   if (options.length < 2) return null;
-  let best: { id: string; total: number } | null = null;
-  for (const o of options) {
-    const t = optionTotals(o, vatRate).total;
-    if (t > 0 && (!best || t < best.total)) best = { id: o.id, total: t };
-  }
-  return best?.id ?? null;
+  const totals = options.map((o) => ({ id: o.id, total: optionTotals(o, vatRate).total })).filter((x) => x.total > 0);
+  if (!totals.length) return null;
+  const min = Math.min(...totals.map((x) => x.total));
+  const cheapest = totals.filter((x) => x.total === min);
+  // Bằng tiền nhau thì không có phương án nào "tiết kiệm nhất"
+  return cheapest.length === 1 ? cheapest[0].id : null;
 }
 
 /** Số đêm giữa 2 ngày YYYY-MM-DD; null nếu thiếu hoặc ngày về không sau ngày đi */

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, CalendarClock, Dices, Globe2, MoreHorizontal, PartyPopper, Plus, Search, Settings, Ship } from "lucide-react";
+import { Building2, CalendarClock, Dices, FileText, Globe2, MoreHorizontal, PartyPopper, Plus, Search, Settings, Ship } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useClientRole } from "@/lib/use-client-role";
 import type { UserRole } from "@/lib/types";
@@ -29,6 +29,7 @@ export function BottomNav({ role: initialRole }: { role: UserRole }) {
     { href: "/availability-links", label: "Link check lịch", icon: CalendarClock },
     { href: "/holiday-funds", label: "Quỹ ngày lễ", icon: PartyPopper },
     { href: "/daily-wishes", label: "Lời chúc", icon: Dices },
+    { href: "/bao-gia", label: "Báo giá", icon: FileText },
     ...(role === "admin"
       ? [
           { href: "/admin/products", label: "Quản lý", icon: Settings },

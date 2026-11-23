@@ -146,16 +146,16 @@ function Photo({ o, className }: { o: QuoteOption; className?: string }) {
 }
 
 function SingleHead({ o }: { o: QuoteOption }) {
-  if (!o.name && !o.image_url && !o.highlights.length) return <div className="h-2" />;
+  if (!o.name && !o.image_url && !o.highlights.some(Boolean)) return <div className="h-2" />;
   return (
     <div className="mx-5 mt-5 flex flex-col gap-3 overflow-hidden rounded-xl border border-border sm:mx-8 sm:flex-row print:flex-row">
       <Photo o={o} className="h-40 w-full sm:h-auto sm:w-56 print:h-auto print:w-56" />
       <div className="p-3.5">
         <p className="text-[16px] font-extrabold">{o.name}</p>
         {o.place && <p className="text-[12.5px] text-ink-muted">{o.place}</p>}
-        {o.highlights.length > 0 && (
+        {o.highlights.some(Boolean) && (
           <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-[12.5px] text-ink-muted">
-            {o.highlights.map((h, i) => (
+            {o.highlights.filter(Boolean).map((h, i) => (
               <li key={i}>{h}</li>
             ))}
           </ul>
@@ -177,9 +177,9 @@ function OptionCard({ o, q, best }: { o: QuoteOption; q: DocQuote; best: boolean
       <div className="flex flex-1 flex-col px-3 py-2.5">
         <p className="font-extrabold leading-snug">{o.name || "Phương án"}</p>
         {o.place && <p className="text-[12px] text-ink-muted">{o.place}</p>}
-        {o.highlights.length > 0 && (
+        {o.highlights.some(Boolean) && (
           <ul className="mt-1 list-disc pl-4 text-[12px] text-ink-muted">
-            {o.highlights.map((h, i) => (
+            {o.highlights.filter(Boolean).map((h, i) => (
               <li key={i}>{h}</li>
             ))}
           </ul>
