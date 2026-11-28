@@ -78,3 +78,10 @@ test("vat_rate, status, ngày không hợp lệ → mặc định", () => {
   assert.equal(ok(quote({ vat_rate: "abc" })).vat_rate, 8);
   assert.equal(ok(quote({ vat_rate: 10, status: "sent" })).vat_rate, 10);
 });
+
+test("list_price: chỉ giữ khi lớn hơn đơn giá", () => {
+  assert.equal(firstItem(ok(quote({ options: [{ items: [item({ unit_price: 1600000, list_price: "2.000.000" })] }] }))).list_price, 2_000_000);
+  assert.equal(firstItem(ok(quote({ options: [{ items: [item({ unit_price: 1600000, list_price: 1500000 })] }] }))).list_price, null);
+  assert.equal(firstItem(ok(quote({ options: [{ items: [item({ unit_price: null, list_price: 2000000 })] }] }))).list_price, null);
+  assert.equal(firstItem(ok(quote({ options: [{ items: [item()] }] }))).list_price, null);
+});

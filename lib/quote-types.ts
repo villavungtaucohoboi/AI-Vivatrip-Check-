@@ -19,6 +19,8 @@ export interface QuoteItem {
   times_unit: string;
   /** Đơn giá — trống = "Theo thực tế", không cộng vào tổng */
   unit_price: number | null;
+  /** Giá gốc trước ưu đãi — chỉ để khách so sánh (gạch ngang), không cộng vào tổng. Bỏ qua nếu ≤ đơn giá. */
+  list_price?: number | null;
   /** Cộng VAT (theo vat_rate của báo giá) cho dòng này */
   vat: boolean;
 }

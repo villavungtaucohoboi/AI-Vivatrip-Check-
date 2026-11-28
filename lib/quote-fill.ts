@@ -1,6 +1,7 @@
 // Điền phương án báo giá từ sản phẩm trong kho (villa / resort / khách sạn).
-// CHỈ lấy thông tin gửi khách được: tên, khu vực, ảnh, quyền lợi (perks) và GIÁ BÁN GỐC.
-// KHÔNG đọc price_source, contract_summary, surcharge_note, note, chiết khấu.
+// CHỈ lấy thông tin gửi khách được: tên, khu vực, ảnh, quyền lợi (perks) và giá bán.
+// Resort/khách sạn có hạng phòng: đơn giá = giá SAU "CK %" của hạng phòng, kèm giá trước CK (list_price) để khách so sánh.
+// KHÔNG đọc price_source, contract_summary, surcharge_note, note, chiết khấu nội bộ của villa.
 import { getApplicablePrice } from "@/lib/pricing";
 import { quoteStay } from "@/lib/resort-pricing";
 import { newId, type QuoteItem, type QuoteOption } from "@/lib/quote-types";
@@ -51,7 +52,7 @@ export function buildStayItems(a: { product: Product; rate: HotelRate | null; ho
 
   if (rate) {
     const q = quoteStay(rate, p, holidays, from, to ?? undefined);
-    return [stayItem({ name: roomName(rate), unit_price: q.avgBase, times: q.nights.length, qty_unit: "phòng", note: rate.breakfast ? "Gồm ăn sáng" : "" })];
+    return [stayItem({ name: roomName(rate), unit_price: q.avg, list_price: q.avg != null && q.avgBase != null && q.avgBase > q.avg ? q.avgBase : null, times: q.nights.length, qty_unit: "phòng", note: rate.breakfast ? "Gồm ăn sáng" : "" })];
   }
 
   // Villa / resort chưa nhập hạng phòng: giá từng đêm, gom các đêm cùng giá

@@ -19,6 +19,9 @@ const strList = (v: unknown, maxItems: number, maxLen: number) =>
   (Array.isArray(v) ? v : []).map((x) => str(x, maxLen)).filter(Boolean).slice(0, maxItems);
 const id = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim().slice(0, 64) : newId());
 
+/** Giá gốc chỉ giữ khi lớn hơn đơn giá (có ưu đãi thật) */
+const listPrice = (lp: number | null, up: number | null) => (lp != null && up != null && lp > up ? lp : null);
+
 function item(raw: unknown): QuoteItem {
   const o = isObj(raw) ? raw : {};
   const group = (QUOTE_GROUPS as string[]).includes(o.group as string) ? (o.group as QuoteGroup) : "Khác";
@@ -32,6 +35,7 @@ function item(raw: unknown): QuoteItem {
     times: num(o.times),
     times_unit: str(o.times_unit, 30),
     unit_price: num(o.unit_price),
+    list_price: listPrice(num(o.list_price), num(o.unit_price)),
     vat: o.vat === true,
   };
 }

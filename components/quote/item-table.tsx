@@ -44,6 +44,7 @@ export function ItemTable({ items, onChange }: { items: QuoteItem[]; onChange: (
               <NumIn value={it.times} onChange={(v) => set(it.id, { times: v })} placeholder="× (1)" className="col-span-3 sm:col-span-2" />
               <TextIn value={it.times_unit} onChange={(v) => set(it.id, { times_unit: v })} placeholder="đêm/bữa" className="col-span-3 sm:col-span-2" />
               <NumIn value={it.unit_price} onChange={(v) => set(it.id, { unit_price: v })} placeholder="Đơn giá (trống = theo thực tế)" className="col-span-12 sm:col-span-4" />
+              <NumIn value={it.list_price ?? null} onChange={(v) => set(it.id, { list_price: v })} placeholder="Giá gốc trước ưu đãi (tuỳ chọn, hiện gạch ngang)" className="col-span-12 sm:col-span-6" />
             </div>
             <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[12.5px]">
               <label className="flex items-center gap-1 text-ink-muted">

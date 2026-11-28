@@ -2,7 +2,7 @@
 // Không dùng hook → render được cả ở server lẫn client.
 // Chỉ hiện những gì sale nhập — không có chiết khấu / com / nguồn giá.
 import { cheapestOptionId, lineAmount, nightsBetween, optionTotals, perPax, qtyLabel } from "@/lib/quote-calc";
-import { COMPANY, QUOTE_GROUPS, type Quote, type QuoteInput, type QuoteOption } from "@/lib/quote-types";
+import { COMPANY, QUOTE_GROUPS, type Quote, type QuoteInput, type QuoteItem, type QuoteOption } from "@/lib/quote-types";
 import { vnd } from "@/lib/tour-utils";
 import { cn } from "@/lib/utils";
 
@@ -294,6 +294,8 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
+const hasList = (it: QuoteItem) => it.list_price != null && it.unit_price != null && it.list_price > it.unit_price;
+
 function GroupRows({ g, o, vatRate }: { g: string; o: QuoteOption; vatRate: number }) {
   const items = o.items.filter((it) => it.group === g);
   return (
@@ -314,9 +316,17 @@ function GroupRows({ g, o, vatRate }: { g: string; o: QuoteOption; vatRate: numb
             </td>
             <td className="py-1.5 pr-2 sm:whitespace-nowrap print:whitespace-nowrap">
               {qtyLabel(it)}
-              {it.unit_price != null && <span className="block text-[11px] text-ink-muted sm:hidden print:hidden">× {vnd(it.unit_price)}</span>}
+              {it.unit_price != null && (
+                <span className="block text-[11px] text-ink-muted sm:hidden print:hidden">
+                  × {hasList(it) && <s className="mr-1">{vnd(it.list_price as number)}</s>}
+                  {vnd(it.unit_price)}
+                </span>
+              )}
             </td>
-            <td className="hidden whitespace-nowrap py-1.5 pr-2 text-right tabular-nums sm:table-cell print:table-cell">{it.unit_price != null ? vnd(it.unit_price) : "—"}</td>
+            <td className="hidden whitespace-nowrap py-1.5 pr-2 text-right tabular-nums sm:table-cell print:table-cell">
+              {hasList(it) && <s className="block text-[11px] text-ink-muted">{vnd(it.list_price as number)}</s>}
+              {it.unit_price != null ? vnd(it.unit_price) : "—"}
+            </td>
             <td className="whitespace-nowrap py-1.5 text-right font-semibold tabular-nums">{a != null ? vnd(a) : <span className="font-normal text-ink-muted">Theo thực tế</span>}</td>
           </tr>
         );

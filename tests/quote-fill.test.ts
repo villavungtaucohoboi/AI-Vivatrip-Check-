@@ -54,14 +54,15 @@ test("optionFromProduct không mang thông tin nội bộ", () => {
   for (const secret of ["Đối tác X", "net 4tr", "phụ thu nội bộ", "ghi chú nội bộ"]) assert.ok(!s.includes(secret), secret);
 });
 
-test("resort: giá theo hạng phòng = giá gốc trung bình/đêm", () => {
+test("resort: đơn giá = giá sau CK trung bình/đêm, kèm giá gốc để so sánh", () => {
   const resort = { id: "r1", product_name: "Wyndham", type: "resort", area: "Chương Mỹ", rate_periods: [], high_seasons: [], weekend_nights: [5, 6] } as unknown as Product;
   const rate = { id: "rt1", product_id: "r1", room_type: "Junior Suite", rate_plan: "Ăn sáng", price: 2_000_000, price_low_weekday: 2_000_000, breakfast: true, discount_percent: 20 } as unknown as HotelRate;
   const items = buildStayItems({ product: resort, rate, holidays: [], from: "2026-12-07", to: "2026-12-09" });
   const q = quoteStay(rate, resort, [], "2026-12-07", "2026-12-09");
   assert.equal(items.length, 1);
-  assert.equal(items[0].unit_price, q.avgBase);
-  assert.equal(items[0].unit_price, 2_000_000);
+  assert.equal(items[0].unit_price, q.avg);
+  assert.equal(items[0].unit_price, 1_600_000);
+  assert.equal(items[0].list_price, 2_000_000);
   assert.equal(items[0].times, 2);
   assert.equal(items[0].qty_unit, "phòng");
   assert.match(items[0].name, /Junior Suite/);
