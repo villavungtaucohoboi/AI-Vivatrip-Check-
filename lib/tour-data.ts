@@ -41,6 +41,7 @@ export async function fetchTours(
       places: t.places ?? [],
       highlights: t.highlights ?? [],
       images: t.images ?? [],
+      image_credits: t.image_credits ?? [],
       itinerary: Array.isArray(t.itinerary) ? t.itinerary : [],
       includes: t.includes ?? [],
       excludes: t.excludes ?? [],

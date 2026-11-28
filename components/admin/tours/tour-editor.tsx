@@ -36,6 +36,7 @@ const EMPTY: Form = {
   group_label: "",
   cover_url: "",
   images: [],
+  image_credits: [],
   single_usd: null,
   tips_usd: null,
   visa_discount: 0,

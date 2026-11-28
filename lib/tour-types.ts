@@ -30,6 +30,8 @@ export interface Tour {
   cover_url: string | null;
   /** Ảnh tour (5–7 ảnh), ảnh đầu là ảnh bìa */
   images: string[];
+  /** Ghi công ảnh miễn phí (Wikimedia) — hiện chữ nhỏ cuối bản PDF */
+  image_credits: string[];
   single_usd: number | null;
   tips_usd: number | null;
   visa_discount: number;

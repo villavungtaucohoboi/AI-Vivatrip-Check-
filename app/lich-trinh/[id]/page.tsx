@@ -22,6 +22,7 @@ const load = cache(async (id: string): Promise<TourWithDeps | null> => {
     places: x.places ?? [],
     highlights: x.highlights ?? [],
     images: x.images ?? [],
+    image_credits: x.image_credits ?? [],
     itinerary: Array.isArray(x.itinerary) ? x.itinerary : [],
     includes: x.includes ?? [],
     excludes: x.excludes ?? [],

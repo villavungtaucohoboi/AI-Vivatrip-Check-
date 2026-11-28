@@ -197,6 +197,10 @@ export function TourPdf({ tour: t, departures }: { tour: TourWithDeps; departure
         </section>
       )}
 
+      {(t.image_credits ?? []).length > 0 && (
+        <p className="mt-4 px-5 text-[9.5px] leading-snug text-ink-muted sm:px-8">Ảnh minh hoạ: {t.image_credits.join(" · ")}</p>
+      )}
+
       <footer className="quote-block mt-6 bg-teal px-5 py-4 text-center text-[12.5px] text-white sm:px-8">
         <p className="font-bold">Liên hệ VivaTrip để giữ chỗ và nhận tư vấn chi tiết</p>
         <p className="text-white/90">
