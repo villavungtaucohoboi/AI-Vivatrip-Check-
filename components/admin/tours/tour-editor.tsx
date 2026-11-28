@@ -35,6 +35,7 @@ const EMPTY: Form = {
   source_link: "",
   group_label: "",
   cover_url: "",
+  images: [],
   single_usd: null,
   tips_usd: null,
   visa_discount: 0,
@@ -224,6 +225,14 @@ export function TourEditor({
           <L label="Tips HDV (USD/khách)"><input type="number" value={f.tips_usd ?? ""} onChange={(e) => set("tips_usd", e.target.value ? Number(e.target.value) : null)} className={inp} /></L>
           <L label="Khách có sẵn visa trừ (đ)"><input inputMode="numeric" value={f.visa_discount || ""} onChange={(e) => set("visa_discount", money(e.target.value) ?? 0)} placeholder="500" className={inp} /></L>
           <L label="Ảnh bìa (link ảnh, tuỳ chọn)"><input value={f.cover_url ?? ""} onChange={(e) => set("cover_url", e.target.value)} className={inp} /></L>
+          <L label="Ảnh tour (mỗi dòng 1 link, ảnh đầu là ảnh bìa)" span2>
+            <textarea
+              value={(f.images ?? []).join("\n")}
+              onChange={(e) => set("images", e.target.value.split(/\r?\n/).map((x) => x.trim()))}
+              rows={4}
+              className="w-full rounded-lg border border-border bg-white px-2.5 py-2 text-[13.5px] outline-none focus:border-teal"
+            />
+          </L>
         </div>
         <div className="grid gap-2.5 rounded-xl bg-amber-50/70 p-3 sm:grid-cols-2 lg:grid-cols-4">
           <L label="Đối tác (giá mua của) — chỉ Sale">

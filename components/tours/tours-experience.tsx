@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Check, ChevronDown, Copy, FileSpreadsheet, Globe2, Pencil, Plane, Plus, Search, Users } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, Copy, FileDown, FileSpreadsheet, Globe2, Pencil, Plane, Plus, Search, Users } from "lucide-react";
 import { toast } from "sonner";
 import { useClientRole } from "@/lib/use-client-role";
 import {
@@ -27,6 +27,7 @@ import {
   type QuoteInput,
 } from "@/lib/tour-utils";
 import type { TourWithDeps } from "@/lib/tour-types";
+import { tourImages } from "@/components/tours/tour-pdf";
 import { cn } from "@/lib/utils";
 
 async function copyToClipboard(s: string) {
@@ -197,9 +198,9 @@ export function ToursExperience({ tours, today, loadError }: { tours: TourWithDe
                   )}
                 >
                   <span className="flex h-[72px] w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-teal-light to-sand-light text-3xl">
-                    {t.cover_url ? (
+                    {tourImages(t)[0] ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={t.cover_url} alt="" className="h-full w-full object-cover" />
+                      <img src={tourImages(t)[0]} alt="" loading="lazy" className="h-full w-full object-cover" />
                     ) : (
                       flagOf(t)
                     )}
@@ -349,6 +350,7 @@ function TourDetail({
   const [openDays, setOpenDays] = useState<Set<number>>(new Set([0]));
   const k = quoteCalc(t, q);
   const hasCom = ups.some((d) => d.com != null);
+  const imgs = tourImages(t);
 
   async function onCopy(kind: string) {
     const s = tourText(kind, t, today, q);
@@ -382,6 +384,16 @@ function TourDetail({
 
       {/* Đầu tour */}
       <div className="overflow-hidden rounded-2xl border border-border bg-white shadow-card">
+        {imgs.length > 0 && (
+          <div className="flex snap-x gap-1 overflow-x-auto bg-paper-dim">
+            {imgs.map((src, i) => (
+              <a key={src} href={src} target="_blank" rel="noopener noreferrer" className={cn("shrink-0 snap-start", i === 0 ? "w-[78%] sm:w-[52%]" : "w-[44%] sm:w-[30%]")}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={src} alt="" loading="lazy" className="aspect-[4/3] h-full w-full object-cover" />
+              </a>
+            ))}
+          </div>
+        )}
         <div className="bg-gradient-to-r from-teal-light via-white to-sand-light p-4 sm:p-5">
           <p className="text-[12.5px] font-bold text-teal-dark">
             {flagOf(t)} {t.country} · {t.days ? `${t.days} ngày ${t.nights ?? t.days - 1} đêm` : ""} · khởi hành {t.from_city}
@@ -396,6 +408,15 @@ function TourDetail({
             {t.group_label && (
               <span className="flex items-center gap-1 rounded-lg bg-white/80 px-2 py-1"><Users className="h-3.5 w-3.5" /> {t.group_label}</span>
             )}
+            <a
+              href={`/lich-trinh/${t.id}${q.date ? `?d=${q.date}` : ""}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 rounded-lg bg-teal px-2 py-1 font-bold text-white"
+              title="Mở bản lịch trình đẹp để gửi khách / lưu PDF (giá theo ngày đang chọn)"
+            >
+              <FileDown className="h-3.5 w-3.5" /> Xuất PDF lịch trình
+            </a>
             {isAdmin && (
               <Link href={`/admin/tours/${t.id}`} className="flex items-center gap-1 rounded-lg bg-ink px-2 py-1 font-bold text-white">
                 <Pencil className="h-3.5 w-3.5" /> Sửa tour

@@ -28,6 +28,8 @@ export interface Tour {
   source_link: string | null;
   group_label: string | null;
   cover_url: string | null;
+  /** Ảnh tour (5–7 ảnh), ảnh đầu là ảnh bìa */
+  images: string[];
   single_usd: number | null;
   tips_usd: number | null;
   visa_discount: number;

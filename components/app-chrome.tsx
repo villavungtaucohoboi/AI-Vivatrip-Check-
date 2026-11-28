@@ -11,7 +11,7 @@ import { ChatWidget } from "@/components/chat/chat-widget";
  */
 export function AppChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? "";
-  if (pathname.startsWith("/bg/")) return <>{children}</>;
+  if (pathname.startsWith("/bg/") || pathname.startsWith("/lich-trinh/")) return <>{children}</>;
   return (
     <>
       <div className="contents print:hidden">

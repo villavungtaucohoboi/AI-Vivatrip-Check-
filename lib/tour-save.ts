@@ -35,6 +35,7 @@ export function cleanTour(t: Partial<Tour>) {
     source_link: t.source_link?.trim() || null,
     group_label: t.group_label?.trim() || null,
     cover_url: t.cover_url?.trim() || null,
+    images: arr(t.images).filter((u) => /^https?:\/\//i.test(u)).slice(0, 12),
     single_usd: num(t.single_usd),
     tips_usd: num(t.tips_usd),
     visa_discount: num(t.visa_discount) ?? 0,
