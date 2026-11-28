@@ -6,7 +6,7 @@ import { QuoteToolbar } from "@/components/quote/quote-toolbar";
 import { quotesDb, rowToQuote } from "@/lib/quote-db";
 import type { Quote } from "@/lib/quote-types";
 
-// TRANG BÁO GIÁ GỬI KHÁCH — baogia.vivatrip.vn/bg/<code>. Đọc đúng 1 báo giá theo mã (service role).
+// TRANG BÁO GIÁ GỬI KHÁCH — <tên miền web>/bg/<code> (sau này có thể là baogia.vivatrip.vn). Đọc đúng 1 báo giá theo mã (service role).
 export const dynamic = "force-dynamic";
 
 const load = cache(async (code: string): Promise<Quote | null> => {

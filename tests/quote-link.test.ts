@@ -20,3 +20,8 @@ test("zaloMessage có chương trình, khoảng ngày và link ở cuối", () =
   const noDate = zaloMessage({ program: { ...program, date_from: null, date_to: null }, customer }, url);
   assert.ok(!noDate.includes("("), noDate);
 });
+
+test("chưa đặt tên miền riêng: link dùng vivatripcheck.vercel.app", () => {
+  if (process.env.NEXT_PUBLIC_QUOTE_BASE_URL) return;
+  assert.equal(quoteUrl("ABC23456"), "https://vivatripcheck.vercel.app/bg/ABC23456");
+});

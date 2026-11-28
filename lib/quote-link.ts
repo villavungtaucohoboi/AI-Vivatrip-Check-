@@ -1,7 +1,12 @@
 // Link gửi khách + tin nhắn Zalo
 import type { QuoteInput } from "@/lib/quote-types";
 
-export function quoteUrl(code: string, base: string = process.env.NEXT_PUBLIC_QUOTE_BASE_URL || "https://baogia.vivatrip.vn"): string {
+// Tên miền link gửi khách: đặt NEXT_PUBLIC_QUOTE_BASE_URL (VD https://baogia.vivatrip.vn) khi đã có tên miền riêng;
+// chưa đặt thì dùng chính tên miền đang mở web (hiện tại vivatripcheck.vercel.app).
+const DEFAULT_BASE = "https://vivatripcheck.vercel.app";
+const currentOrigin = () => (typeof window !== "undefined" && window.location?.origin ? window.location.origin : DEFAULT_BASE);
+
+export function quoteUrl(code: string, base: string = process.env.NEXT_PUBLIC_QUOTE_BASE_URL || currentOrigin()): string {
   return `${base.replace(/\/+$/, "")}/bg/${code}`;
 }
 
